@@ -6,6 +6,20 @@
 window.Parsers = (function() {
   'use strict';
 
+  // Başlık, URL ve sayfa dipnotlarını filtreleme kara listesi
+  const HEADER_BLACKLIST = [
+    'DERS', 'SINAV', 'FAKULTE', 'FAKÜLTE', 'BOLUM', 'BÖLÜM', 'ELEMAN', 'IMZA', 'İMZA',
+    'OGUBS', 'BOLUMDERS', 'HTTP', 'ASPX', 'TARIH', 'TARİH', 'DURUM', 'SAAT', 'YER',
+    'OSMANGAZI', 'OSMANGAZİ', 'UNIVERSITE', 'ÜNİVERSİTE', 'YOKLAMA', 'LİSTE', 'LISTE',
+    'EDU.TR', 'WWW', 'DEVAM', 'ARASINAV', 'ARA SINAV', 'FİNAL', 'FINAL', 'T.C', 'DONEM', 'DÖNEM'
+  ];
+
+  function isBlacklisted(str) {
+    if (!str) return false;
+    const upper = str.toString().toUpperCase();
+    return HEADER_BLACKLIST.some(k => upper.includes(k)) || upper.includes('.EDU.TR') || upper.includes('HTTP');
+  }
+
   // Türkçe karakter temizleme ve normalizasyon
   function cleanText(text) {
     if (!text) return '';
@@ -25,6 +39,7 @@ window.Parsers = (function() {
     let cleaned = name.toString()
       .replace(/^\d+[\s\.\-]+/, '') // baştaki sıra numarasını at
       .replace(/\b(AKTİF|PASİF|KAYITLI|ASİL|YEDEK|NORMAL ÖĞRETİM|İKİNCİ ÖĞRETİM|LİSANS|İLAHİYAT)\b/gi, '')
+      .replace(/[\s•\-\+]+$/, '')   // sondaki imza/devam kutucuk işaretlerini at
       .replace(/\s+/g, ' ')
       .trim();
     return cleaned.toLocaleUpperCase('tr-TR');
@@ -41,6 +56,9 @@ window.Parsers = (function() {
     for (let line of lines) {
       line = line.trim();
       if (!line) continue;
+      
+      // Başlık, link veya dipnot satırıysa doğrudan atla
+      if (isBlacklisted(line)) continue;
 
       // Tab ile ayrılmış (Excel / OBS kopyalaması)
       if (line.includes('\t')) {
@@ -50,31 +68,51 @@ window.Parsers = (function() {
 
         for (let part of parts) {
           const digits = part.replace(/\D/g, '');
-          if (!studentNo && digits.length >= 8 && digits.length <= 13) {
-            studentNo = digits;
+          if (!studentNo && digits.length >= 8 && digits.length <= 13 && !isBlacklisted(part)) {
+            // Tarih / zaman damgası (örn: 15.06.2026 -> 15062026...) olmamalı
+            if (!/^1506\d+/.test(digits) && !digits.startsWith('2026') && !digits.startsWith('2025')) {
+              studentNo = digits;
+            }
           } else if (!studentName && /[a-zA-ZçğıöşüÇĞİÖŞÜ]{2,}/.test(part) && !isPossibleStudentNo(part)) {
-            // Başlık satırlarını atla
-            if (/^(ÖĞRENCİ NO|NUMARA|ADI SOYADI|AD SOYAD|SIRA NO|SIRA)$/i.test(part)) continue;
-            studentName = part;
+            if (!isBlacklisted(part)) {
+              studentName = part;
+            }
           }
         }
 
         if (studentNo && studentName) {
+          const cleaned = cleanStudentName(studentName);
+          if (!isBlacklisted(cleaned) && cleaned.length >= 3) {
+            students.push({
+              no: studentNo,
+              name: cleaned
+            });
+            continue;
+          }
+        }
+      }
+
+      // Boşluklarla ayrılmış satırlar
+      // Format 1: Sıra No + Öğrenci No + Ad Soyad (Örn: "1 181120211176 ÖMER FARUK YILMAZ")
+      const matchWithSira = line.match(/(?:^|\s)(\d{1,4})\s+(\d{8,12})\s+([a-zA-ZçğıöşüÇĞİÖŞÜ\s]{3,})/);
+      if (matchWithSira) {
+        const studentNo = matchWithSira[2];
+        const studentName = cleanStudentName(matchWithSira[3]);
+        if (studentName && !isBlacklisted(studentName) && studentName.length >= 3) {
           students.push({
             no: studentNo,
-            name: cleanStudentName(studentName)
+            name: studentName
           });
           continue;
         }
       }
 
-      // Boşluklarla ayrılmış satırlar
-      // Örnek: "1 181120231042 ELİF DAĞAŞAN" veya "181120231042 ELİF DAĞAŞAN"
-      const match = line.match(/(?:^|\s)(\d{8,13})\s+([a-zA-ZçğıöşüÇĞİÖŞÜ\s]{3,})/);
-      if (match) {
-        const studentNo = match[1];
-        const studentName = cleanStudentName(match[2]);
-        if (studentName && !/^(ÖĞRENCİ|NUMARA|ADI SOYADI)/i.test(studentName)) {
+      // Format 2: Öğrenci No + Ad Soyad (Örn: "181120211176 ÖMER FARUK YILMAZ")
+      const matchDirect = line.match(/(?:^|\s)(\d{9,12})\s+([a-zA-ZçğıöşüÇĞİÖŞÜ\s]{3,})/);
+      if (matchDirect) {
+        const studentNo = matchDirect[1];
+        const studentName = cleanStudentName(matchDirect[2]);
+        if (studentName && !isBlacklisted(studentName) && studentName.length >= 3) {
           students.push({
             no: studentNo,
             name: studentName
@@ -129,7 +167,7 @@ window.Parsers = (function() {
         const noVal = cleanText(row[noColIdx]).replace(/\D/g, '');
         const nameVal = cleanStudentName(row[nameColIdx]);
 
-        if (isPossibleStudentNo(noVal) && nameVal.length >= 3) {
+        if (isPossibleStudentNo(noVal) && nameVal.length >= 3 && !isBlacklisted(nameVal)) {
           students.push({ no: noVal, name: nameVal });
         }
       }
@@ -143,10 +181,13 @@ window.Parsers = (function() {
         for (let c = 0; c < row.length; c++) {
           const val = cleanText(row[c]);
           const digits = val.replace(/\D/g, '');
-          if (!foundNo && digits.length >= 8 && digits.length <= 13) {
+          if (!foundNo && digits.length >= 8 && digits.length <= 13 && !isBlacklisted(val)) {
             foundNo = digits;
           } else if (!foundName && /[a-zA-ZçğıöşüÇĞİÖŞÜ]{3,}/.test(val) && !isPossibleStudentNo(val)) {
-            foundName = cleanStudentName(val);
+            const cleaned = cleanStudentName(val);
+            if (!isBlacklisted(cleaned)) {
+              foundName = cleaned;
+            }
           }
         }
 
@@ -178,7 +219,6 @@ window.Parsers = (function() {
 
     try {
       if (typeof window !== 'undefined' && window.location && window.location.protocol === 'file:') {
-        // file:/// protokolünde Chrome yerel worker'ı engellediği için CDN yedeği kullanılır
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
       } else {
         pdfjsLib.GlobalWorkerOptions.workerSrc = './libs/pdf.worker.min.js';
@@ -210,12 +250,12 @@ window.Parsers = (function() {
         });
       }
 
-      // Y eksenini yukarıdan aşağıya sırala (PDF'de Y ters çalışabilir)
+      // Y eksenini yukarıdan aşağıya sırala
       const sortedY = Array.from(lineMap.keys()).sort((a, b) => b - a);
 
       for (let y of sortedY) {
         const items = lineMap.get(y).sort((a, b) => a.x - b.x);
-        const lineStr = items.map(it => it.str).join('\t');
+        const lineStr = items.map(it => it.str).join(' ');
         fullText += lineStr + '\n';
       }
     }
