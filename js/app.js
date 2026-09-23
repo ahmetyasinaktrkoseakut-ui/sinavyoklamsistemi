@@ -263,11 +263,18 @@
       input.addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
+
+        if (file.size === 0) {
+          alert(`⚠️ "${file.name}" dosyasının boyutu 0 Bayt (boş dosya)!\n\nOBS'den PDF indirilirken işlem tamamlanmamış veya tarayıcı boş bir dosya kaydetmiş görünüyor.\n\nÇözüm Yolları:\n1. OBS üzerinden listeyi tekrar indiriniz (dosyanın 0 KB olmadığından emin olunuz).\n2. Veya OBS'deki tabloyu kopyalayıp hemen yanındaki "📋 Metin / Pano Yapıştır" butonuna yapıştırabilirsiniz.`);
+          e.target.value = '';
+          return;
+        }
+
         try {
           const buffer = await file.arrayBuffer();
           const students = await window.Parsers.parsePdf(buffer);
           if (students.length === 0) {
-            alert('PDF içeriğinde öğrenci numarası tespit edilemedi.');
+            alert('PDF içeriğinde öğrenci numarası tespit edilemedi. Dosya resim formatında taranmış olabilir. İsterseniz OBS sayfasından kopyalayıp "Metin / Pano Yapıştır" seçeneğini kullanabilirsiniz.');
             return;
           }
           const grp = state.groups.find(g => g.id === e.target.dataset.groupId);
@@ -277,6 +284,8 @@
           }
         } catch (err) {
           alert('PDF okunurken bir hata oluştu: ' + err.message);
+        } finally {
+          e.target.value = '';
         }
       });
     });

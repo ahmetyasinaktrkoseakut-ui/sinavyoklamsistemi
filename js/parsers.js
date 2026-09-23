@@ -167,8 +167,27 @@ window.Parsers = (function() {
       throw new Error('PDF kütüphanesi (pdfjsLib) yüklenemedi.');
     }
 
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'libs/pdf.worker.min.js';
-    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+      throw new Error('Yüklenen PDF dosyası boş (0 bayt). OBS\'den indirilen dosya henüz tamamlanmamış veya boş inmiş olabilir.');
+    }
+
+    const uint8Data = new Uint8Array(arrayBuffer);
+    if (uint8Data.length === 0) {
+      throw new Error('Yüklenen PDF dosyası boş (0 bayt).');
+    }
+
+    try {
+      if (typeof window !== 'undefined' && window.location && window.location.protocol === 'file:') {
+        // file:/// protokolünde Chrome yerel worker'ı engellediği için CDN yedeği kullanılır
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      } else {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = './libs/pdf.worker.min.js';
+      }
+    } catch (e) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = './libs/pdf.worker.min.js';
+    }
+
+    const loadingTask = pdfjsLib.getDocument({ data: uint8Data });
     const pdf = await loadingTask.promise;
 
     let fullText = '';
