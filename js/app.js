@@ -111,8 +111,20 @@
       }
       const grp = state.groups.find(g => g.id === currentPasteGroupId);
       if (grp) {
-        grp.students = students;
+        const existing = grp.students || [];
+        const combined = [...existing, ...students];
+        const seen = new Set();
+        const unique = [];
+        for (const s of combined) {
+          if (!seen.has(s.no)) {
+            seen.add(s.no);
+            unique.push(s);
+          }
+        }
+        const addedCount = unique.length - existing.length;
+        grp.students = unique;
         renderGroups();
+        alert(`✅ ${addedCount} yeni öğrenci gruba aktarıldı! (Grup Toplamı: ${unique.length} Öğrenci)`);
       }
       elPasteModal.style.display = 'none';
       elPasteTextarea.value = '';
@@ -179,13 +191,13 @@
         </div>
 
         <div class="upload-options">
-          <label class="upload-btn">
-            📄 PDF Listesi Yükle
-            <input type="file" accept=".pdf" style="display:none" class="pdf-upload-input" data-group-id="${group.id}">
+          <label class="upload-btn" title="Birden fazla şubenin PDF'ini aynı anda veya sırayla seçebilirsiniz">
+            📄 PDF Listesi Yükle (Çoklu Seçilebilir)
+            <input type="file" accept=".pdf" multiple style="display:none" class="pdf-upload-input" data-group-id="${group.id}">
           </label>
-          <label class="upload-btn">
-            📊 Excel / CSV Yükle
-            <input type="file" accept=".xlsx,.xls,.csv" style="display:none" class="excel-upload-input" data-group-id="${group.id}">
+          <label class="upload-btn" title="Birden fazla Excel dosyasını seçebilirsiniz">
+            📊 Excel / CSV Yükle (Çoklu Seçilebilir)
+            <input type="file" accept=".xlsx,.xls,.csv" multiple style="display:none" class="excel-upload-input" data-group-id="${group.id}">
           </label>
           <button type="button" class="upload-btn paste-btn" data-group-id="${group.id}">
             📋 Metin / Pano Yapıştır
@@ -258,58 +270,120 @@
       });
     });
 
-    // PDF Yükleme
+    // PDF Yükleme (Çoklu Dosya Destekli)
     document.querySelectorAll('.pdf-upload-input').forEach(input => {
       input.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+        const files = Array.from(e.target.files);
+        if (!files || files.length === 0) return;
 
-        if (file.size === 0) {
-          alert(`⚠️ "${file.name}" dosyasının boyutu 0 Bayt (boş dosya)!\n\nOBS'den PDF indirilirken işlem tamamlanmamış veya tarayıcı boş bir dosya kaydetmiş görünüyor.\n\nÇözüm Yolları:\n1. OBS üzerinden listeyi tekrar indiriniz (dosyanın 0 KB olmadığından emin olunuz).\n2. Veya OBS'deki tabloyu kopyalayıp hemen yanındaki "📋 Metin / Pano Yapıştır" butonuna yapıştırabilirsiniz.`);
-          e.target.value = '';
-          return;
+        const grp = state.groups.find(g => g.id === e.target.dataset.groupId);
+        if (!grp) return;
+
+        let allNewStudents = [];
+        let errors = [];
+        let processedCount = 0;
+
+        for (const file of files) {
+          if (file.size === 0) {
+            errors.push(`⚠️ "${file.name}" dosyasının boyutu 0 Bayt (boş dosya).`);
+            continue;
+          }
+
+          try {
+            const buffer = await file.arrayBuffer();
+            const students = await window.Parsers.parsePdf(buffer);
+            if (students.length === 0) {
+              errors.push(`"${file.name}" dosyasında öğrenci tespit edilemedi.`);
+            } else {
+              allNewStudents.push(...students);
+              processedCount++;
+            }
+          } catch (err) {
+            errors.push(`"${file.name}" okunurken hata: ${err.message}`);
+          }
         }
 
-        try {
-          const buffer = await file.arrayBuffer();
-          const students = await window.Parsers.parsePdf(buffer);
-          if (students.length === 0) {
-            alert('PDF içeriğinde öğrenci numarası tespit edilemedi. Dosya resim formatında taranmış olabilir. İsterseniz OBS sayfasından kopyalayıp "Metin / Pano Yapıştır" seçeneğini kullanabilirsiniz.');
-            return;
+        if (allNewStudents.length > 0) {
+          const existing = grp.students || [];
+          const combined = [...existing, ...allNewStudents];
+          const seen = new Set();
+          const unique = [];
+          for (const s of combined) {
+            if (!seen.has(s.no)) {
+              seen.add(s.no);
+              unique.push(s);
+            }
           }
-          const grp = state.groups.find(g => g.id === e.target.dataset.groupId);
-          if (grp) {
-            grp.students = students;
-            renderGroups();
+          const addedCount = unique.length - existing.length;
+          grp.students = unique;
+          renderGroups();
+          
+          let msg = `✅ ${processedCount} adet PDF başarıyla aktarıldı!\nEklenen Yeni Öğrenci: ${addedCount}\nGrubun Toplam Öğrenci Sayısı: ${unique.length}`;
+          if (errors.length > 0) {
+            msg += `\n\nUyarılar:\n` + errors.join('\n');
           }
-        } catch (err) {
-          alert('PDF okunurken bir hata oluştu: ' + err.message);
-        } finally {
-          e.target.value = '';
+          alert(msg);
+        } else if (errors.length > 0) {
+          alert('Dosyalar yüklenirken sorun oluştu:\n' + errors.join('\n'));
         }
+
+        e.target.value = '';
       });
     });
 
-    // Excel Yükleme
+    // Excel Yükleme (Çoklu Dosya Destekli)
     document.querySelectorAll('.excel-upload-input').forEach(input => {
       input.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        try {
-          const buffer = await file.arrayBuffer();
-          const students = window.Parsers.parseExcel(buffer);
-          if (students.length === 0) {
-            alert('Excel dosyasında geçerli öğrenci listesi tespit edilemedi.');
-            return;
+        const files = Array.from(e.target.files);
+        if (!files || files.length === 0) return;
+
+        const grp = state.groups.find(g => g.id === e.target.dataset.groupId);
+        if (!grp) return;
+
+        let allNewStudents = [];
+        let errors = [];
+        let processedCount = 0;
+
+        for (const file of files) {
+          if (file.size === 0) {
+            errors.push(`⚠️ "${file.name}" dosyası boş.`);
+            continue;
           }
-          const grp = state.groups.find(g => g.id === e.target.dataset.groupId);
-          if (grp) {
-            grp.students = students;
-            renderGroups();
+
+          try {
+            const buffer = await file.arrayBuffer();
+            const students = window.Parsers.parseExcel(buffer);
+            if (students.length === 0) {
+              errors.push(`"${file.name}" dosyasında geçerli öğrenci listesi bulunamadı.`);
+            } else {
+              allNewStudents.push(...students);
+              processedCount++;
+            }
+          } catch (err) {
+            errors.push(`"${file.name}" okunurken hata: ${err.message}`);
           }
-        } catch (err) {
-          alert('Excel okunurken hata oluştu: ' + err.message);
         }
+
+        if (allNewStudents.length > 0) {
+          const existing = grp.students || [];
+          const combined = [...existing, ...allNewStudents];
+          const seen = new Set();
+          const unique = [];
+          for (const s of combined) {
+            if (!seen.has(s.no)) {
+              seen.add(s.no);
+              unique.push(s);
+            }
+          }
+          const addedCount = unique.length - existing.length;
+          grp.students = unique;
+          renderGroups();
+          alert(`✅ ${processedCount} adet Excel dosyası başarıyla aktarıldı!\nEklenen Yeni Öğrenci: ${addedCount}\nGrubun Toplam Öğrenci Sayısı: ${unique.length}`);
+        } else if (errors.length > 0) {
+          alert('Dosyalar yüklenirken sorun oluştu:\n' + errors.join('\n'));
+        }
+
+        e.target.value = '';
       });
     });
 
