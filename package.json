@@ -1,0 +1,17 @@
+{
+  "name": "esogu-ilahiyat-sinav-yoklama-sistemi",
+  "version": "1.0.0",
+  "description": "ESOGÜ İlahiyat Fakültesi Sınav Yoklama ve Akıllı Karışık Dağıtım Otomasyonu",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx serve ."
+  },
+  "keywords": [
+    "esogu",
+    "ilahiyat",
+    "sinav-yoklama",
+    "firtina-yazilim"
+  ],
+  "author": "Ahmet Yasin Aktürk - Fırtına Yazılım Hizmeti",
+  "license": "MIT"
+}

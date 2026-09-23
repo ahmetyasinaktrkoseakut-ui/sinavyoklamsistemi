@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESOGÜ İlahiyat Fakültesi - Sınav Yoklama ve Akıllı Dağıtım Otomasyonu</title>
+  <link rel="stylesheet" href="./css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏛️</text></svg>">
+</head>
+<body>
+
+  <div class="container">
+    
+    <!-- Üst Bilgi (Header) -->
+    <header class="header">
+      <div class="header-left">
+        <div class="header-logo">OGÜ</div>
+        <div class="header-title">
+          <h1>ESKİŞEHİR OSMANGAZİ ÜNİVERSİTESİ</h1>
+          <p>İLAHİYAT FAKÜLTESİ • Sınav Yoklama ve Akıllı Karışık Dağıtım Otomasyonu</p>
+        </div>
+      </div>
+      <div class="header-badge">
+        2025 - 2026 Bahar Dönemi
+      </div>
+    </header>
+
+    <!-- Adım 1: Sınav Bilgileri -->
+    <section class="step-card">
+      <div class="step-header">
+        <div class="step-title">
+          <span class="step-number">1</span>
+          <span>Sınav Bilgileri</span>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group" style="grid-column: span 2;">
+          <label class="form-label" for="courseName">Ders Kodu ve Adı</label>
+          <input type="text" id="courseName" class="form-input" placeholder="Örn: 181134040 SINIF YÖNETİMİ (A)" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="examDate">Sınav Tarihi ve Saati</label>
+          <input type="text" id="examDate" class="form-input" placeholder="Örn: 15/06/2026 12:30" autocomplete="off">
+        </div>
+      </div>
+    </section>
+
+    <!-- Adım 2 & 3: Sınıf / Şube Grupları ve Derslik Ataması -->
+    <section class="step-card">
+      <div class="step-header">
+        <div class="step-title">
+          <span class="step-number">2</span>
+          <span>Öğrenci Grupları & Derslik Ataması</span>
+        </div>
+        <button type="button" id="addGroupBtn" class="btn btn-secondary" style="font-size: 13px;">
+          + Yeni Grup / Şube Ekle
+        </button>
+      </div>
+      
+      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+        💡 Farklı sınıfların veya alttan alanların listesini ayrı gruplar olarak yükleyebilir ve her grubun hangi dersliklere dağıtılacağını tek tıkla belirleyebilirsiniz. Sistem her grubu kendi içinde rastgele karıştıracaktır.
+      </p>
+
+      <!-- Grupların dinamik listelendiği alan -->
+      <div id="groupsContainer" class="groups-container"></div>
+    </section>
+
+    <!-- Dağıtımı Başlat Butonu -->
+    <div style="text-align: center; margin: 30px 0;">
+      <button type="button" id="distributeBtn" class="btn btn-primary btn-lg" style="box-shadow: 0 4px 14px rgba(30, 58, 138, 0.3);">
+        🎲 Öğrencileri Karıştır ve Dersliklere Dağıt
+      </button>
+    </div>
+
+    <!-- Sonuçlar ve İndirme Bölümü -->
+    <section id="resultsSection" class="step-card" style="display: none;">
+      <div class="step-header">
+        <div class="step-title">
+          <span class="step-number">3</span>
+          <span>Dağıtım Sonuçları ve Çıktı Alma</span>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" id="wordExportBtn" class="btn btn-primary">
+            📥 Word Olarak İndir (.docx)
+          </button>
+          <button type="button" id="excelExportBtn" class="btn btn-success">
+            📥 Excel Olarak İndir (.xlsx)
+          </button>
+          <button type="button" id="printBtn" class="btn btn-secondary">
+            🖨️ Yazdır / PDF
+          </button>
+        </div>
+      </div>
+
+      <!-- Salon Sekmeleri -->
+      <div id="resultTabs" class="result-tabs"></div>
+
+      <!-- Aktif Salon Tablosu -->
+      <div id="resultContent"></div>
+    </section>
+
+    <!-- Footer ve Telif Bilgisi -->
+    <footer class="footer">
+      <div id="footerCredit" class="footer-credit" title="Yönetici için tıklayın">
+        Bu sistem AHMET YASİN AKTÜRK tarafından ESOGÜ İLAHİYAT hocalarının hizmetine sunulmak için yapılmıştır
+      </div>
+      <div class="footer-firm">
+        FIRTINA YAZILIM HİZMETİ
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- Pano Yapıştırma Modalı -->
+  <div id="pasteModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>📋 Öğrenci Listesi Yapıştır</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;">
+          Excel'den veya OBS sayfasından kopyaladığınız öğrenci listesini aşağıdaki alana yapıştırın. Sistem numara ve isimleri otomatik algılayacaktır.
+        </p>
+        <textarea id="pasteTextarea" class="form-textarea" style="width: 100%; height: 260px; font-family: monospace; font-size: 12px;" placeholder="Örnek:&#10;181120231042 ELİF DAĞAŞAN&#10;181120231071 ZEYNEP KIZILIRMAK&#10;..."></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary modal-cancel">İptal</button>
+        <button type="button" id="pasteConfirmBtn" class="btn btn-primary">Listeyi Aktar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Kütüphaneler (İnternetsiz Yerel Dosyalar) -->
+  <script src="./libs/pdf.min.js"></script>
+  <script src="./libs/xlsx.full.min.js"></script>
+  <script src="./libs/docx.umd.js"></script>
+
+  <!-- Uygulama Modülleri -->
+  <script src="./js/parsers.js"></script>
+  <script src="./js/distributor.js"></script>
+  <script src="./js/docx-export.js"></script>
+  <script src="./js/excel-export.js"></script>
+  <script src="./js/admin.js"></script>
+  <script src="./js/app.js"></script>
+
+</body>
+</html>
