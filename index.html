@@ -31,11 +31,15 @@
         </div>
       </div>
       <div class="form-grid">
-        <div class="form-group" style="grid-column: span 2;">
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label class="form-label" for="examTitle">Sınav ve Liste Üst Başlığı (Dönem / Sınav Türü)</label>
+          <input type="text" id="examTitle" class="form-input" value="2025-2026 EĞİTİM-ÖĞRETİM YILI BAHAR YARIYILI FİNAL SINAVI YOKLAMA LİSTESİ" autocomplete="off">
+        </div>
+        <div class="form-group" style="flex: 2;">
           <label class="form-label" for="courseName">Ders Kodu ve Adı</label>
           <input type="text" id="courseName" class="form-input" placeholder="Örn: 181134040 SINIF YÖNETİMİ (A)" autocomplete="off">
         </div>
-        <div class="form-group">
+        <div class="form-group" style="flex: 1;">
           <label class="form-label" for="examDate">Sınav Tarihi ve Saati</label>
           <input type="text" id="examDate" class="form-input" placeholder="Örn: 15/06/2026 12:30" autocomplete="off">
         </div>

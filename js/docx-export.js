@@ -22,10 +22,12 @@ window.DocxExporter = (function() {
   /**
    * Dağıtılmış sınav listesini Word (.docx) formatında oluşturur ve indirir
    */
-  async function generate({ courseName, examDate, results, academicYear = '2025-2026 EĞİTİM-ÖĞRETİM YILI BAHAR YARIYILI' }) {
+  async function generate({ courseName, examDate, examTitle, results, academicYear = '2025-2026 EĞİTİM-ÖĞRETİM YILI BAHAR YARIYILI' }) {
     if (typeof docx === 'undefined') {
       throw new Error('Word kütüphanesi (docx) yüklenemedi.');
     }
+
+    const finalHeaderTitle = (examTitle || '').trim() || `${academicYear} FİNAL SINAVI YOKLAMA LİSTESİ`;
 
     const {
       Document,
@@ -78,7 +80,7 @@ window.DocxExporter = (function() {
           spacing: { after: 140 },
           children: [
             new TextRun({
-              text: `${academicYear} FİNAL SINAVI YOKLAMA LİSTESİ`,
+              text: finalHeaderTitle,
               bold: true,
               size: 21, // 10.5 pt
               font: 'Calibri'

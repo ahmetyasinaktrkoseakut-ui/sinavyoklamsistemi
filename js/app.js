@@ -9,6 +9,7 @@
   const state = {
     courseName: '',
     examDate: '',
+    examTitle: '2025-2026 EĞİTİM-ÖĞRETİM YILI BAHAR YARIYILI FİNAL SINAVI YOKLAMA LİSTESİ',
     academicYear: '2025-2026 EĞİTİM-ÖĞRETİM YILI BAHAR YARIYILI',
     classrooms: window.Distributor.getDefaultClassrooms(),
     groups: [
@@ -24,7 +25,7 @@
   };
 
   // DOM Elemanları
-  let elCourseName, elExamDate, elGroupsContainer, elAddGroupBtn, elDistributeBtn;
+  let elCourseName, elExamDate, elExamTitle, elGroupsContainer, elAddGroupBtn, elDistributeBtn;
   let elResultsSection, elResultTabs, elResultContent, elWordExportBtn, elExcelExportBtn, elPrintBtn;
   let elPasteModal, elPasteTextarea, elPasteConfirmBtn, currentPasteGroupId = null;
 
@@ -38,6 +39,7 @@
   function initElements() {
     elCourseName = document.getElementById('courseName');
     elExamDate = document.getElementById('examDate');
+    elExamTitle = document.getElementById('examTitle');
     elGroupsContainer = document.getElementById('groupsContainer');
     elAddGroupBtn = document.getElementById('addGroupBtn');
     elDistributeBtn = document.getElementById('distributeBtn');
@@ -55,6 +57,10 @@
   function initEvents() {
     elCourseName.addEventListener('input', (e) => state.courseName = e.target.value);
     elExamDate.addEventListener('input', (e) => state.examDate = e.target.value);
+    if (elExamTitle) {
+      state.examTitle = elExamTitle.value;
+      elExamTitle.addEventListener('input', (e) => state.examTitle = e.target.value);
+    }
 
     elAddGroupBtn.addEventListener('click', () => {
       const nextNum = state.groups.length + 1;
@@ -74,6 +80,7 @@
       window.DocxExporter.generate({
         courseName: state.courseName,
         examDate: state.examDate,
+        examTitle: state.examTitle,
         academicYear: state.academicYear,
         results: state.results
       });
@@ -84,6 +91,7 @@
       window.ExcelExporter.generate({
         courseName: state.courseName,
         examDate: state.examDate,
+        examTitle: state.examTitle,
         academicYear: state.academicYear,
         results: state.results
       });
@@ -510,7 +518,8 @@
     try {
       const results = window.Distributor.distribute({
         groups: preparedGroups,
-        mode: 'fill'
+        mode: 'fill',
+        courseName: state.courseName
       });
 
       state.results = results;
@@ -520,6 +529,7 @@
       window.AdminManager.saveExamRecord({
         courseName: state.courseName,
         examDate: state.examDate,
+        examTitle: state.examTitle,
         groups: state.groups,
         results: state.results
       });
@@ -608,7 +618,7 @@
       <div class="print-page">
         <div style="text-align: center; margin-bottom: 12px;">
           <h2 style="font-size: 13pt; margin-bottom: 4px;">ESKİŞEHİR OSMANGAZİ ÜNİVERSİTESİ İLAHİYAT FAKÜLTESİ</h2>
-          <h3 style="font-size: 11pt;">${state.academicYear} FİNAL SINAVI YOKLAMA LİSTESİ</h3>
+          <h3 style="font-size: 11pt;">${(state.examTitle || '').trim() || `${state.academicYear} FİNAL SINAVI YOKLAMA LİSTESİ`}</h3>
         </div>
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 10pt;">
           <tr>

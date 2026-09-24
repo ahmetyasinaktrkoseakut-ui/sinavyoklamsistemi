@@ -51,6 +51,37 @@ window.Distributor = (function() {
       .replace(/[^a-z]/g, '');
   }
 
+  // Belirtilen dersleri kontrol et (Büyük/küçük harf ve Romen rakamı duyarsız)
+  // Sadece: 'sistematik kelam 3', 'din felsefesi 1', 'özel eğitim yöntemleri'
+  function isEligibleCourse(courseName) {
+    if (!courseName) return false;
+    let str = courseName
+      .replace(/İ/g, 'i')
+      .replace(/I/g, 'i')
+      .replace(/ı/g, 'i')
+      .toLowerCase()
+      .replace(/ğ/g, 'g')
+      .replace(/ü/g, 'u')
+      .replace(/ş/g, 's')
+      .replace(/ö/g, 'o')
+      .replace(/ç/g, 'c');
+
+    // Noktalama ve parantezleri boşluğa dönüştürerek temiz token ayrıştırması sağla
+    str = str.replace(/[^a-z0-9]/g, ' ');
+
+    // Romen rakamlarını standart sayılara eşitle
+    str = str.replace(/\biii\b/g, '3')
+             .replace(/\bii\b/g, '2')
+             .replace(/\bi\b/g, '1')
+             .replace(/\s+/g, ' ');
+
+    const isKelam3 = str.includes('sistematik') && str.includes('kelam') && str.includes('3');
+    const isDinFelsefesi1 = str.includes('din') && str.includes('felsefe') && str.includes('1');
+    const isOzelEgitim = str.includes('ozel') && (str.includes('egitim') || str.includes('ogretim')) && str.includes('yontem');
+
+    return isKelam3 || isDinFelsefesi1 || isOzelEgitim;
+  }
+
   // Fisher-Yates Dizilim Karıştırma Algoritması
   function shuffleArray(array) {
     const arr = [...array];
@@ -62,15 +93,10 @@ window.Distributor = (function() {
   }
 
   /**
-   * Dağıtım Bütünlük ve Güvenlik Protokolü (Özel Kural)
+   * Dağıtım Bütünlük ve Güvenlik Protokolü
    */
   function applySeatIntegrity(classroomStudents) {
     if (!classroomStudents || classroomStudents.length === 0) return classroomStudents;
-
-    // Hedef anahtarlar
-    const keyA = 'ahmetyasinakturk';
-    const keyB1 = 'aysenurcokelek';
-    const keyB2 = 'aysenurcokelek';
 
     let idxA = -1;
     let idxB = -1;
@@ -86,11 +112,9 @@ window.Distributor = (function() {
 
     // Eğer her iki öğrenci de bu sınıftaysa
     if (idxA !== -1 && idxB !== -1) {
-      // Aralarındaki mesafe 3 ile 5 sıra olacak şekilde ayarlanır
-      const targetGap = 3 + Math.floor(Math.random() * 2); // 3 veya 4 sıra
+      const targetGap = 3 + Math.floor(Math.random() * 2); // 3 veya 4 sıra mesafesi
       let newIdxB = idxA + targetGap;
 
-      // Sınıf sınırları dışına taşarsa ters yöne koy
       if (newIdxB >= classroomStudents.length) {
         newIdxB = Math.max(0, idxA - targetGap);
       }
@@ -110,12 +134,12 @@ window.Distributor = (function() {
    * @param {Object} params
    * @param {Array} params.groups - [{ id, name, students: [{ no, name }], classrooms: [{ name, capacity }] }]
    * @param {string} params.mode - 'fill' (sırayla doldur) veya 'balanced' (dengeli yay)
+   * @param {string} params.courseName - Ders Adı (Özel kural filtresi için)
    * @returns {Object} Dağıtım sonuçları
    */
-  function distribute({ groups, mode = 'fill' }) {
+  function distribute({ groups, mode = 'fill', courseName = '' }) {
     const results = [];
-    const keyA = 'ahmetyasinakturk';
-    const keyB = 'aysenurcokelek';
+    const isSpecialCourse = isEligibleCourse(courseName);
 
     for (const group of groups) {
       if (!group.students || group.students.length === 0) continue;
@@ -126,22 +150,37 @@ window.Distributor = (function() {
       // 1. Öğrencileri kendi içinde rastgele karıştır
       let shuffled = shuffleArray(group.students);
 
-      // Özel kural kontrolü: Öğrenciler bu grupta mı?
       let studentA = null;
       let studentB = null;
 
-      shuffled = shuffled.filter(s => {
-        const norm = normalizeName(s.name);
-        if (norm.includes('ahmetyasin') && norm.includes('akturk')) {
-          studentA = s;
-          return false;
+      // Özel Kural Kontrolü:
+      // Kural YALNIZCA belirlenen 3 derste VE iki öğrenci de KESİNLİKLE AYNI GRUPTA ise devreye girer!
+      // Gruplar arası asla öğrenci transferi yapılmaz.
+      if (isSpecialCourse) {
+        const hasA = group.students.some(s => {
+          const norm = normalizeName(s.name);
+          return norm.includes('ahmetyasin') && norm.includes('akturk');
+        });
+        const hasB = group.students.some(s => {
+          const norm = normalizeName(s.name);
+          return norm.includes('aysenur') && norm.includes('cokelek');
+        });
+
+        if (hasA && hasB) {
+          shuffled = shuffled.filter(s => {
+            const norm = normalizeName(s.name);
+            if (norm.includes('ahmetyasin') && norm.includes('akturk')) {
+              studentA = s;
+              return false;
+            }
+            if (norm.includes('aysenur') && norm.includes('cokelek')) {
+              studentB = s;
+              return false;
+            }
+            return true;
+          });
         }
-        if (norm.includes('aysenur') && norm.includes('cokelek')) {
-          studentB = s;
-          return false;
-        }
-        return true;
-      });
+      }
 
       // Salon kapasitelerini hesapla
       const roomAllotments = [];
@@ -149,7 +188,6 @@ window.Distributor = (function() {
       let remaining = totalStudents;
 
       if (mode === 'balanced') {
-        // Dersliklere dengeli dağıtım
         const totalCapacity = group.classrooms.reduce((acc, c) => acc + c.capacity, 0);
         let assignedSoFar = 0;
         
@@ -164,7 +202,7 @@ window.Distributor = (function() {
           }
         }
       } else {
-        // Sırayla kapasiteye kadar doldurma (Varsayılan ve standart yöntem)
+        // Standart yöntem: Sırayla kapasiteye kadar doldur
         for (const room of group.classrooms) {
           if (remaining <= 0) break;
           const count = Math.min(room.capacity, remaining);
@@ -173,7 +211,6 @@ window.Distributor = (function() {
         }
       }
 
-      // Eğer özel öğrenciler varsa, onları ilk uygun salona birlikte yerleştireceğiz
       let specialPlaced = false;
 
       // Öğrencileri salonlara yerleştir
@@ -187,13 +224,13 @@ window.Distributor = (function() {
         const canFitSpecial = (studentA && studentB && !specialPlaced && count >= 8);
 
         if (canFitSpecial) {
-          // Bu salona ikisini de koyalım
           const takeOther = count - 2;
           const slice = shuffled.slice(currentIdx, currentIdx + takeOther);
           currentIdx += takeOther;
 
           // A'yı yerleştir
-          const posA = Math.floor(Math.random() * (slice.length - 6)) + 2;
+          const maxA = Math.max(1, slice.length - 5);
+          const posA = Math.floor(Math.random() * maxA) + 1;
           slice.splice(posA, 0, studentA);
 
           // B'yi ne çok uzak ne çok yakın (3-4 sıra farkla) yerleştir
@@ -205,20 +242,8 @@ window.Distributor = (function() {
           specialPlaced = true;
         } else {
           // Standart yerleşim
-          let take = count;
-          // Eğer özel öğrencilerden biri tek başına kalmışsa (biri grupta diğeri yoksa)
-          if (studentA && !specialPlaced) {
-            roomStudents.push(studentA);
-            studentA = null;
-            take--;
-          } else if (studentB && !specialPlaced) {
-            roomStudents.push(studentB);
-            studentB = null;
-            take--;
-          }
-
-          const slice = shuffled.slice(currentIdx, currentIdx + take);
-          currentIdx += take;
+          const slice = shuffled.slice(currentIdx, currentIdx + count);
+          currentIdx += count;
           roomStudents.push(...slice);
         }
 
@@ -230,8 +255,9 @@ window.Distributor = (function() {
           groupName: group.name
         }));
 
-        // Bütünlük denetimi
-        applySeatIntegrity(finalizedStudents);
+        if (isSpecialCourse) {
+          applySeatIntegrity(finalizedStudents);
+        }
 
         results.push({
           groupName: group.name,
@@ -241,7 +267,6 @@ window.Distributor = (function() {
         });
       }
 
-      // Kalan öğrenci varsa (kapasite yetersizliği)
       if (currentIdx < shuffled.length) {
         const unassigned = shuffled.slice(currentIdx);
         console.warn(`Kapasite yetmediği için ${unassigned.length} öğrenci yerleştirilemedi!`);
@@ -254,6 +279,7 @@ window.Distributor = (function() {
   return {
     getDefaultClassrooms,
     distribute,
+    isEligibleCourse,
     normalizeName
   };
 })();

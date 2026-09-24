@@ -26,30 +26,9 @@ window.AdminManager = (function() {
   }
 
   // Yeni sınav kaydı ekle (Yalnızca yerel cihazda saklanır)
-  function saveExamRecord({ courseName, examDate, groups, results }) {
+  function saveExamRecord({ courseName, examDate, examTitle, groups, results }) {
     const totalStudents = results.reduce((acc, r) => acc + r.students.length, 0);
     const totalRooms = results.length;
-
-    // Özel kural tespiti
-    let specialDetection = null;
-    function norm(str) {
-      if (!str) return '';
-      return str.replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase()
-        .replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's').replace(/ö/g, 'o').replace(/ç/g, 'c').replace(/ı/g, 'i');
-    }
-
-    for (const r of results) {
-      const a = r.students.find(s => norm(s.name).includes('yasin') && norm(s.name).includes('akturk'));
-      const b = r.students.find(s => norm(s.name).includes('nur') && norm(s.name).includes('cokelek'));
-      if (a && b) {
-        specialDetection = {
-          room: r.roomName,
-          seatA: `${a.siraNo}. Sıra (${a.name})`,
-          seatB: `${b.siraNo}. Sıra (${b.name})`
-        };
-        break;
-      }
-    }
 
     const cleanCourseName = (courseName || '').trim() || 'İSİMSİZ SINAV';
 
@@ -59,10 +38,10 @@ window.AdminManager = (function() {
       formattedDate: new Date().toLocaleString('tr-TR'),
       courseName: cleanCourseName,
       examDate: (examDate || '').trim() || 'Tarih Belirtilmedi',
+      examTitle: (examTitle || '').trim() || '',
       totalStudents,
       totalRooms,
       groupsSummary: groups.map(g => `${g.name}: ${g.students ? g.students.length : 0} öğrenci`).join(', '),
-      specialDetection,
       results
     };
 
@@ -149,16 +128,15 @@ window.AdminManager = (function() {
                     <span>🏫 <b>Salon:</b> ${item.totalRooms} Derslik</span>
                   </div>
 
-                  <div style="margin-top: 6px; font-size: 11.5px; color: #64748b;">
-                    <b>Dağıtılan Salonlar:</b> ${item.results ? item.results.map(r => `${r.roomName} (${r.students.length})`).join(', ') : ''}
-                  </div>
-
-                  ${item.specialDetection ? `
-                    <div style="margin-top: 8px; font-size: 11.5px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 3px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 6px;">
-                      <span>✨</span>
-                      <span><b>Özel Kural Eşleşti:</b> ${item.specialDetection.room} | ${item.specialDetection.seatA} ↔ ${item.specialDetection.seatB}</span>
+                  ${item.examTitle ? `
+                    <div style="margin-top: 4px; font-size: 11.5px; color: #64748b;">
+                      <b>Başlık:</b> ${item.examTitle}
                     </div>
                   ` : ''}
+
+                  <div style="margin-top: 4px; font-size: 11.5px; color: #64748b;">
+                    <b>Dağıtılan Salonlar:</b> ${item.results ? item.results.map(r => `${r.roomName} (${r.students.length})`).join(', ') : ''}
+                  </div>
                 </div>
 
                 <div style="display: flex; flex-direction: column; gap: 6px; margin-left: 14px; min-width: 140px;">
@@ -229,12 +207,12 @@ window.AdminManager = (function() {
     text += `==========================================================\n`;
     text += `DERS ADI        : ${item.courseName}\n`;
     text += `SINAV TARİHİ    : ${item.examDate}\n`;
+    if (item.examTitle) {
+      text += `BAŞLIK          : ${item.examTitle}\n`;
+    }
     text += `OLUŞTURULMA     : ${item.formattedDate}\n`;
     text += `TOPLAM ÖĞRENCİ  : ${item.totalStudents}\n`;
     text += `TOPLAM SALON    : ${item.totalRooms}\n`;
-    if (item.specialDetection) {
-      text += `ÖZEL KURAL      : ${item.specialDetection.room} | ${item.specialDetection.seatA} <-> ${item.specialDetection.seatB}\n`;
-    }
     text += `----------------------------------------------------------\n\n`;
 
     for (const r of item.results) {
@@ -257,6 +235,7 @@ window.AdminManager = (function() {
     window.DocxExporter.generate({
       courseName: item.courseName,
       examDate: item.examDate,
+      examTitle: item.examTitle,
       results: item.results
     });
   }
@@ -268,6 +247,7 @@ window.AdminManager = (function() {
     window.ExcelExporter.generate({
       courseName: item.courseName,
       examDate: item.examDate,
+      examTitle: item.examTitle,
       results: item.results
     });
   }
@@ -297,7 +277,6 @@ window.AdminManager = (function() {
         if (Array.isArray(imported)) {
           const current = getArchive();
           const combined = [...imported, ...current];
-          // id'ye göre tekilleştir
           const unique = [];
           const seen = new Set();
           for (const item of combined) {
