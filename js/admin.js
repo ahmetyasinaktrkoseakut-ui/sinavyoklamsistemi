@@ -136,11 +136,6 @@ window.AdminManager = (function() {
 
   // Admin Paneli Açılış
   async function openAdminModal() {
-    if (!navigator.onLine) {
-      alert('⚠️ Sistem yönetim paneli ve sınav arşivi eşitlemesi için aktif bir internet bağlantısı gereklidir.');
-      return;
-    }
-
     if (!isAuthenticated) {
       const pass = prompt('🔐 Yönetici Şifresini Giriniz:');
       if (pass === null) return;

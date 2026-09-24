@@ -135,30 +135,6 @@
       });
     }
 
-    // İnternet Bağlantısı Durum Takibi
-    function updateConnectionStatus() {
-      const statusEl = document.getElementById('connectionStatus');
-      const textEl = document.getElementById('connectionText');
-      const dotEl = document.getElementById('connectionDot');
-      if (!statusEl || !textEl) return;
-      if (navigator.onLine) {
-        statusEl.style.background = '#ecfdf5';
-        statusEl.style.color = '#065f46';
-        statusEl.style.borderColor = '#a7f3d0';
-        if (dotEl) dotEl.style.background = '#10b981';
-        textEl.textContent = 'İnternet Aktif';
-      } else {
-        statusEl.style.background = '#fef2f2';
-        statusEl.style.color = '#991b1b';
-        statusEl.style.borderColor = '#fecaca';
-        if (dotEl) dotEl.style.background = '#ef4444';
-        textEl.textContent = 'İnternet Yok';
-      }
-    }
-    window.addEventListener('online', updateConnectionStatus);
-    window.addEventListener('offline', updateConnectionStatus);
-    updateConnectionStatus();
-
     // Pano Modal Kapat
     document.querySelectorAll('.modal-close, .modal-cancel').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -536,12 +512,6 @@
 
   // Dağıtımı Başlat
   function handleDistribute() {
-    // İnternet Bağlantısı Zorunluluk Kontrolü
-    if (!navigator.onLine) {
-      alert('⚠️ Aktif İnternet Bağlantısı Gerekli:\n\nSınav dağıtım motorunun güvenli çalışabilmesi ve listelerin eksiksiz oluşturulabilmesi için internet bağlantısı gereklidir. Lütfen internet bağlantınızı kontrol edip tekrar deneyiniz.');
-      return;
-    }
-
     if (!state.courseName.trim()) {
       alert('Lütfen sınavın Ders Adını giriniz.');
       elCourseName.focus();
