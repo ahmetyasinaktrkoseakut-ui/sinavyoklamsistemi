@@ -20,6 +20,12 @@
           <p>İLAHİYAT FAKÜLTESİ • Sınav Yoklama ve Akıllı Karışık Dağıtım Otomasyonu</p>
         </div>
       </div>
+      <div>
+        <button type="button" id="headerGuideBtn" class="btn btn-secondary" style="font-size: 13px; font-weight: 600; padding: 8px 14px; display: inline-flex; align-items: center; gap: 6px;">
+          <span>📖</span>
+          <span>Kullanım Kılavuzu</span>
+        </button>
+      </div>
     </header>
 
     <!-- Adım 1: Sınav Bilgileri -->
@@ -131,6 +137,71 @@
       </div>
     </div>
   </div>
+
+  <!-- Kullanım Kılavuzu Modalı (İlk Girişte Ekrana Gelir) -->
+  <div id="guideModal" class="modal-overlay" style="display: flex;">
+    <div class="modal-content" style="max-width: 680px;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 20px;">🏛️</span>
+          <h3 style="font-size: 16px;">Sınav Dağıtım Otomasyonu • Hızlı Kullanım Kılavuzu</h3>
+        </div>
+        <button type="button" class="modal-close" id="guideCloseX">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 18px 22px; max-height: 72vh; overflow-y: auto;">
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; color: #1e3a8a;">
+          👋 <b>Sayın Hocamız, Hoş Geldiniz!</b> Bu sistem, fakültemizin sınav yoklama listelerini saniyeler içinde hazırlamanız ve öğrencileri salonlara adil/karışık biçimde dağıtmanız için geliştirilmiştir.
+        </div>
+
+        <div class="guide-step">
+          <div class="guide-step-num">1</div>
+          <div class="guide-step-content">
+            <h4>Sınav Bilgilerini Belirleyin</h4>
+            <p>En üst alandan sınav başlığını (Dönem ve Vize / Final / Bütünleme), ders kodunu ve sınav tarihini kontrol edip dilediğiniz gibi güncelleyin.</p>
+          </div>
+        </div>
+
+        <div class="guide-step">
+          <div class="guide-step-num">2</div>
+          <div class="guide-step-content">
+            <h4>Öğrenci Listelerini Yükleyin (Çoklu PDF Destekli)</h4>
+            <p>OBS'den indirdiğiniz PDF listelerini yükleyin. <b>Birden fazla şubenin PDF'ini aynı anda veya art arda seçebilirsiniz</b>; sistem tüm öğrencileri tek listede hatasız birleştirir. Dilerseniz Excel (.xlsx) veya doğrudan metin kopyala-yapıştır yapabilirsiniz.</p>
+          </div>
+        </div>
+
+        <div class="guide-step">
+          <div class="guide-step-num">3</div>
+          <div class="guide-step-content">
+            <h4>Derslikleri Seçin ve Kontenjanları Ayarlayın</h4>
+            <p>Grubunuzun dağıtılacağı salon veya amfileri kutucukları işaretleyerek seçin. Kontenjanları ihtiyaca göre değiştirebilirsiniz (Derslik 18 için tek tıkla 39 ↔ 45 butonu yer alır).</p>
+          </div>
+        </div>
+
+        <div class="guide-step">
+          <div class="guide-step-num">4</div>
+          <div class="guide-step-content">
+            <h4>Dağıtımı Yapın ve Resmi Formatlarda Çıktı Alın</h4>
+            <p><b>"Sınavı Dağıt ve Listeleri Oluştur"</b> butonuna tıklayın. Öğrenciler salonlara adil ve rastgele yerleştirilir. Sonuçları tek tıkla resmi fakülte formatında <b>Word (.docx)</b>, <b>Excel (.xlsx)</b> olarak indirin veya doğrudan <b>Yazdır</b> butonuyla A4 çıktısı alın.</p>
+          </div>
+        </div>
+
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 10px 14px; border-radius: 6px; font-size: 12px; color: #166534; display: flex; align-items: center; gap: 8px;">
+          <span>🔒</span>
+          <span><b>%100 Güvenli ve Gizli:</b> Yüklediğiniz hiçbir öğrenci bilgisi internete veya sunuculara iletilmez; tüm işlemler tamamen kendi bilgisayarınızda ve tarayıcınızda gerçekleşir.</span>
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content: space-between; align-items: center;">
+        <span style="font-size: 12px; color: var(--text-muted);">Ekranın sağ altındaki <b>📖 Kılavuz</b> butonundan dilediğiniz an tekrar açabilirsiniz.</span>
+        <button type="button" id="guideConfirmBtn" class="btn btn-primary" style="padding: 8px 22px;">Anladım, Başla</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sabit Kılavuz Butonu (Ekranın köşesinde her zaman durur) -->
+  <button type="button" id="floatingGuideBtn" class="guide-floating-btn" title="Kullanım Kılavuzunu Görüntüle">
+    <span>📖</span>
+    <span>Kılavuz</span>
+  </button>
 
   <!-- Kütüphaneler (İnternetsiz Yerel Dosyalar) -->
   <script src="./libs/pdf.min.js"></script>

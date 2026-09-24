@@ -101,6 +101,32 @@
       window.print();
     });
 
+    // Kullanım Kılavuzu Modalı Kontrolleri
+    const elGuideModal = document.getElementById('guideModal');
+    const elGuideConfirmBtn = document.getElementById('guideConfirmBtn');
+    const elGuideCloseX = document.getElementById('guideCloseX');
+    const elHeaderGuideBtn = document.getElementById('headerGuideBtn');
+    const elFloatingGuideBtn = document.getElementById('floatingGuideBtn');
+
+    function closeGuide() {
+      if (elGuideModal) elGuideModal.style.display = 'none';
+    }
+
+    function openGuide() {
+      if (elGuideModal) elGuideModal.style.display = 'flex';
+    }
+
+    if (elGuideConfirmBtn) elGuideConfirmBtn.addEventListener('click', closeGuide);
+    if (elGuideCloseX) elGuideCloseX.addEventListener('click', closeGuide);
+    if (elHeaderGuideBtn) elHeaderGuideBtn.addEventListener('click', openGuide);
+    if (elFloatingGuideBtn) elFloatingGuideBtn.addEventListener('click', openGuide);
+
+    if (elGuideModal) {
+      elGuideModal.addEventListener('click', (e) => {
+        if (e.target === elGuideModal) closeGuide();
+      });
+    }
+
     // Pano Modal Kapat
     document.querySelectorAll('.modal-close, .modal-cancel').forEach(btn => {
       btn.addEventListener('click', () => {
