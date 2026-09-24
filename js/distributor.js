@@ -156,6 +156,9 @@ window.Distributor = (function() {
       // Özel Kural Kontrolü:
       // Kural YALNIZCA belirlenen 3 derste VE iki öğrenci de KESİNLİKLE AYNI GRUPTA ise devreye girer!
       // Gruplar arası asla öğrenci transferi yapılmaz.
+      // DİĞER DERSLERDE: Tamamen tarafsız ve doğal rastgele karıştırma (Fisher-Yates) işler.
+      // Herhangi bir engelleme, ayırma veya suni kural YOKTUR; doğal dağılım sonucu aynı sınıfta
+      // farklı yerlere denk gelme ihtimali kesinlikle korunur ve kurala takılmaz.
       if (isSpecialCourse) {
         const hasA = group.students.some(s => {
           const norm = normalizeName(s.name);
