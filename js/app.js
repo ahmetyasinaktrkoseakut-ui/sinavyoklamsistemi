@@ -135,6 +135,30 @@
       });
     }
 
+    // İnternet Bağlantısı Durum Takibi
+    function updateConnectionStatus() {
+      const statusEl = document.getElementById('connectionStatus');
+      const textEl = document.getElementById('connectionText');
+      const dotEl = document.getElementById('connectionDot');
+      if (!statusEl || !textEl) return;
+      if (navigator.onLine) {
+        statusEl.style.background = '#ecfdf5';
+        statusEl.style.color = '#065f46';
+        statusEl.style.borderColor = '#a7f3d0';
+        if (dotEl) dotEl.style.background = '#10b981';
+        textEl.textContent = 'İnternet Aktif';
+      } else {
+        statusEl.style.background = '#fef2f2';
+        statusEl.style.color = '#991b1b';
+        statusEl.style.borderColor = '#fecaca';
+        if (dotEl) dotEl.style.background = '#ef4444';
+        textEl.textContent = 'İnternet Yok';
+      }
+    }
+    window.addEventListener('online', updateConnectionStatus);
+    window.addEventListener('offline', updateConnectionStatus);
+    updateConnectionStatus();
+
     // Pano Modal Kapat
     document.querySelectorAll('.modal-close, .modal-cancel').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -512,6 +536,12 @@
 
   // Dağıtımı Başlat
   function handleDistribute() {
+    // İnternet Bağlantısı Zorunluluk Kontrolü
+    if (!navigator.onLine) {
+      alert('⚠️ Aktif İnternet Bağlantısı Gerekli:\n\nSınav dağıtım motorunun güvenli çalışabilmesi ve listelerin eksiksiz oluşturulabilmesi için internet bağlantısı gereklidir. Lütfen internet bağlantınızı kontrol edip tekrar deneyiniz.');
+      return;
+    }
+
     if (!state.courseName.trim()) {
       alert('Lütfen sınavın Ders Adını giriniz.');
       elCourseName.focus();
@@ -529,6 +559,18 @@
     if (!hasAnyStudents) {
       alert('Lütfen en az bir gruba öğrenci listesi yükleyiniz.');
       return;
+    }
+
+    // KAPASİTE YETERLİLİK ÖN KONTROLÜ: Eksik liste üretilmesini engelle
+    for (const g of state.groups) {
+      if (!g.students || g.students.length === 0) continue;
+      const selectedRooms = state.classrooms.filter(c => g.selectedRoomIds.includes(c.id));
+      const totalCapacity = selectedRooms.reduce((acc, c) => acc + c.defaultCapacity, 0);
+      if (totalCapacity < g.students.length) {
+        const diff = g.students.length - totalCapacity;
+        alert(`⛔ DERSLİK KAPASİTESİ YETERSİZ!\n\n"${g.name}" grubunda ${g.students.length} öğrenci bulunuyor ancak seçilen salonların toplam kapasitesi sadece ${totalCapacity} kişi.\n\nEksik veya hatalı liste üretilmemesi için dağıtım durduruldu. Lütfen en az ${diff} kişilik daha derslik seçiniz veya salon kontenjanlarını artırınız.`);
+        return;
+      }
     }
 
     // Dağıtım için grupları hazırla

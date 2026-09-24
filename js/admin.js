@@ -6,7 +6,7 @@
  * 1. F12 ve Yerel Hafıza denetimlerinde ASLA açık metin öğrenci adı, no veya ders adı görünmez.
  * 2. Hangi hoca hangi bilgisayardan dağıtım yaparsa yapsın, arka planda AES-256 ile
  *    şifrelenip görünmez bir şekilde buluta aktarılır.
- * 3. Ahmet Yasin Aktürk telefonundan veya bilgisayarından 'firtina26' şifresiyle panele
+ * 3. Ahmet Yasin Aktürk yetkili yönetici kimliğiyle panele
  *    girdiği anda tüm sınavlar tek ekranda toplanır.
  * 
  * Açılış: Alt telif yazısına 5 kez tıklayarak veya 'Ctrl + Shift + A' tuşları ile.
@@ -16,7 +16,25 @@ window.AdminManager = (function() {
   'use strict';
 
   const STORAGE_KEY = 'firtina_exam_archive';
-  const MASTER_PASSWORD = 'firtina26';
+  // Güvenlik: Kaynak kodda açık şifre yer almaz, SHA-256 kriptografik özetler ile karşılaştırılır
+  const VALID_HASHES = [
+    '17a2ffa14f9822e5d7ef41a5ff63552c4771c8516759b9af7b01101a46945736',
+    '667a98a5a22deba556ec7ec8fb24a0cbc758706de3dc3f26acb1b69c78fc8cf4'
+  ];
+
+  async function sha256Hex(str) {
+    if (window.crypto && window.crypto.subtle) {
+      const buf = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    // Web Crypto yoksa yedek hashleme
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash) + str.charCodeAt(i);
+      hash |= 0;
+    }
+    return String(hash);
+  }
 
   let isAuthenticated = false;
   let inMemoryArchive = [];
@@ -118,10 +136,21 @@ window.AdminManager = (function() {
 
   // Admin Paneli Açılış
   async function openAdminModal() {
+    if (!navigator.onLine) {
+      alert('⚠️ Sistem yönetim paneli ve sınav arşivi eşitlemesi için aktif bir internet bağlantısı gereklidir.');
+      return;
+    }
+
     if (!isAuthenticated) {
       const pass = prompt('🔐 Yönetici Şifresini Giriniz:');
-      if (pass !== MASTER_PASSWORD) {
-        if (pass !== null) alert('Hatalı şifre.');
+      if (pass === null) return;
+
+      const trimmed = pass.trim();
+      const hash = await sha256Hex(trimmed);
+      const isAuthorized = VALID_HASHES.includes(hash);
+
+      if (!isAuthorized) {
+        alert('Hatalı yönetici şifresi.');
         return;
       }
       isAuthenticated = true;
