@@ -56,10 +56,44 @@ window.AdminManager = (function() {
     } catch (e) {
       console.warn('LocalStorage kotası:', e);
     }
+
+    // Bulut Eşitleme (Şifreli olarak arka planda merkezi depoya aktar - PC ↔ Telefon)
+    if (window.CloudSync && typeof window.CloudSync.pushExam === 'function') {
+      window.CloudSync.pushExam(record);
+    }
+  }
+
+  // Buluttan en güncel sınavları çekip yerel hafıza ile birleştir
+  async function refreshCloudSync() {
+    const syncBtn = document.getElementById('adminCloudSyncBtn');
+    if (syncBtn) {
+      syncBtn.disabled = true;
+      syncBtn.innerHTML = '<span>⏳</span> <span>Eşitleniyor...</span>';
+    }
+
+    if (window.CloudSync && typeof window.CloudSync.syncWithLocal === 'function') {
+      try {
+        const local = getArchive();
+        const merged = await window.CloudSync.syncWithLocal(local);
+        if (Array.isArray(merged) && merged.length > 0) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+          const searchInput = document.getElementById('adminSearchInput');
+          renderAdminModal(searchInput ? searchInput.value : '');
+        }
+      } catch (err) {
+        console.warn('Bulut senkronizasyon hatası:', err);
+      }
+    }
+
+    const updatedBtn = document.getElementById('adminCloudSyncBtn');
+    if (updatedBtn) {
+      updatedBtn.disabled = false;
+      updatedBtn.innerHTML = '<span>🔄</span> <span>Bulut ile Eşitle</span>';
+    }
   }
 
   // Admin Paneli Açılış
-  function openAdminModal() {
+  async function openAdminModal() {
     if (!isAuthenticated) {
       const pass = prompt('🔐 Yönetici Şifresini Giriniz:');
       if (pass !== MASTER_PASSWORD) {
@@ -70,6 +104,9 @@ window.AdminManager = (function() {
     }
 
     renderAdminModal();
+
+    // Arka planda buluttaki kayıtları da hemen çekip listeyi güncelle
+    await refreshCloudSync();
   }
 
   function renderAdminModal(filterQuery = '') {
@@ -97,12 +134,16 @@ window.AdminManager = (function() {
         </div>
         <div class="modal-body">
           <div style="background: #eff6ff; border: 1px solid #bfdbfe; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; color: #1e3a8a;">
-            🔒 <b>Gizlilik & Güvenlik Güvencesi:</b> Bu sistemde girilen hiçbir öğrenci ve sınav verisi internete veya sunuculara iletilmez. 
-            Tüm kayıtlar yalnızca hocanın bu bilgisayarında ve tarayıcısında şifreli/yerel olarak saklanır.
+            🔒 <b>Gizlilik & Güvenlik Güvencesi:</b> Bu sistemde girilen tüm sınav verileri tarayıcınızda <b>AES-256</b> ile şifrelenir. 
+            Bilgisayardan veya telefondan girdiğinizde şifreli bulut kasasıyla otomatik eşitlenir.
           </div>
 
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 12px;">
-            <input type="text" id="adminSearchInput" class="form-input" style="flex: 1; font-size: 13px;" placeholder="🔍 Sınav adına göre filtrele..." value="${filterQuery}">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 10px; flex-wrap: wrap;">
+            <input type="text" id="adminSearchInput" class="form-input" style="flex: 1; min-width: 220px; font-size: 13px;" placeholder="🔍 Sınav adına göre filtrele..." value="${filterQuery}">
+            <button id="adminCloudSyncBtn" class="btn btn-primary" style="font-size: 12px; padding: 6px 12px; display: inline-flex; align-items: center; gap: 6px;" onclick="window.AdminManager.refreshCloudSync()">
+              <span>🔄</span>
+              <span>Bulut ile Eşitle</span>
+            </button>
             <span style="font-size: 13px; font-weight: 700; color: #475569; white-space: nowrap;">Toplam: ${archive.length} Sınav Kaydı</span>
           </div>
 
@@ -311,6 +352,7 @@ window.AdminManager = (function() {
   return {
     saveExamRecord,
     openAdminModal,
+    refreshCloudSync,
     deleteRecord,
     clearArchive,
     inspectRecord,
