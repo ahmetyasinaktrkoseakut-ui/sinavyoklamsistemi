@@ -142,6 +142,51 @@
       });
     });
 
+    // Gruplar arası mükerrer öğrenci denetimi (Aynı öğrenci başka bir grupta var mı?)
+    function checkCrossGroupConflicts(targetGroupId, newStudents) {
+      const conflicts = [];
+      const valid = [];
+
+      const registry = new Map();
+      for (const g of state.groups) {
+        if (g.id === targetGroupId) continue;
+        for (const s of (g.students || [])) {
+          const noKey = (s.no || '').toString().trim();
+          if (noKey) {
+            registry.set(`no_${noKey}`, g.name);
+          }
+          const nameKey = (s.name || '').toString().trim().toLowerCase();
+          if (nameKey) {
+            registry.set(`name_${nameKey}`, g.name);
+          }
+        }
+      }
+
+      for (const s of newStudents) {
+        const noKey = (s.no || '').toString().trim();
+        const nameKey = (s.name || '').toString().trim().toLowerCase();
+
+        let conflictingGroupName = null;
+        if (noKey && registry.has(`no_${noKey}`)) {
+          conflictingGroupName = registry.get(`no_${noKey}`);
+        } else if (nameKey && registry.has(`name_${nameKey}`)) {
+          conflictingGroupName = registry.get(`name_${nameKey}`);
+        }
+
+        if (conflictingGroupName) {
+          conflicts.push({
+            no: s.no || 'Yok',
+            name: s.name,
+            groupName: conflictingGroupName
+          });
+        } else {
+          valid.push(s);
+        }
+      }
+
+      return { valid, conflicts };
+    }
+
     // Pano Onayla
     elPasteConfirmBtn.addEventListener('click', () => {
       if (!currentPasteGroupId) return;
@@ -153,8 +198,10 @@
       }
       const grp = state.groups.find(g => g.id === currentPasteGroupId);
       if (grp) {
+        const { valid, conflicts } = checkCrossGroupConflicts(grp.id, students);
+
         const existing = grp.students || [];
-        const combined = [...existing, ...students];
+        const combined = [...existing, ...valid];
         const seen = new Set();
         const unique = [];
         for (const s of combined) {
@@ -166,7 +213,14 @@
         const addedCount = unique.length - existing.length;
         grp.students = unique;
         renderGroups();
-        alert(`✅ ${addedCount} yeni öğrenci gruba aktarıldı! (Grup Toplamı: ${unique.length} Öğrenci)`);
+
+        let msg = `✅ ${addedCount} yeni öğrenci gruba aktarıldı! (Grup Toplamı: ${unique.length} Öğrenci)`;
+        if (conflicts.length > 0) {
+          msg += `\n\n⛔ Gruplar Arası Mükerrer Engeli (${conflicts.length} Öğrenci):\nAşağıdaki öğrenciler başka bir grupta zaten kayıtlı olduğu için bu gruba eklenmedi:\n` +
+            conflicts.slice(0, 8).map(c => `• ${c.name} (${c.no}) → "${c.groupName}" grubunda kayıtlı`).join('\n') +
+            (conflicts.length > 8 ? `\n...ve ${conflicts.length - 8} öğrenci daha.` : '');
+        }
+        alert(msg);
       }
       elPasteModal.style.display = 'none';
       elPasteTextarea.value = '';
@@ -274,16 +328,26 @@
   function renderClassroomCards(group) {
     return state.classrooms.map(room => {
       const isSelected = group.selectedRoomIds.includes(room.id);
+      const otherGroup = state.groups.find(g => g.id !== group.id && g.selectedRoomIds.includes(room.id));
+      const isOccupied = !!otherGroup;
+
       return `
-        <div class="classroom-card ${isSelected ? 'selected' : ''}" data-room-id="${room.id}" data-group-id="${group.id}">
+        <div class="classroom-card ${isSelected ? 'selected' : ''} ${isOccupied ? 'occupied' : ''}" 
+             data-room-id="${room.id}" 
+             data-group-id="${group.id}"
+             ${isOccupied ? `data-occupied-by="${otherGroup.name}" title="Bu derslik '${otherGroup.name}' tarafından seçilmiştir."` : ''}>
           <div class="classroom-card-header">
             <span class="classroom-name">${room.name}</span>
-            <input type="checkbox" ${isSelected ? 'checked' : ''} style="cursor: pointer;">
+            ${isOccupied ? `
+              <span class="classroom-occupied-badge" title="${otherGroup.name} grubunda seçili">🔒 ${otherGroup.name}</span>
+            ` : `
+              <input type="checkbox" ${isSelected ? 'checked' : ''} style="cursor: pointer;">
+            `}
           </div>
           <div class="classroom-capacity-control" onclick="event.stopPropagation();">
             <span>Kontenjan:</span>
-            <input type="number" class="capacity-input" value="${room.defaultCapacity}" min="1" max="500" data-room-id="${room.id}">
-            ${room.id === 'derslik-18' ? `
+            <input type="number" class="capacity-input" value="${room.defaultCapacity}" min="1" max="500" data-room-id="${room.id}" ${isOccupied ? 'disabled' : ''}>
+            ${room.id === 'derslik-18' && !isOccupied ? `
               <button type="button" class="classroom-toggle-btn toggle-18-btn" data-room-id="${room.id}">
                 ${room.defaultCapacity === 39 ? '45 Yap' : '39 Yap'}
               </button>
@@ -346,8 +410,10 @@
         }
 
         if (allNewStudents.length > 0) {
+          const { valid, conflicts } = checkCrossGroupConflicts(grp.id, allNewStudents);
+
           const existing = grp.students || [];
-          const combined = [...existing, ...allNewStudents];
+          const combined = [...existing, ...valid];
           const seen = new Set();
           const unique = [];
           for (const s of combined) {
@@ -361,6 +427,11 @@
           renderGroups();
           
           let msg = `✅ ${processedCount} adet PDF başarıyla aktarıldı!\nEklenen Yeni Öğrenci: ${addedCount}\nGrubun Toplam Öğrenci Sayısı: ${unique.length}`;
+          if (conflicts.length > 0) {
+            msg += `\n\n⛔ Gruplar Arası Mükerrer Engeli (${conflicts.length} Öğrenci):\nAşağıdaki öğrenciler başka bir grupta zaten kayıtlı olduğu için bu gruba eklenmedi:\n` +
+              conflicts.slice(0, 8).map(c => `• ${c.name} (${c.no}) → "${c.groupName}" grubunda kayıtlı`).join('\n') +
+              (conflicts.length > 8 ? `\n...ve ${conflicts.length - 8} öğrenci daha.` : '');
+          }
           if (errors.length > 0) {
             msg += `\n\nUyarılar:\n` + errors.join('\n');
           }
@@ -407,8 +478,10 @@
         }
 
         if (allNewStudents.length > 0) {
+          const { valid, conflicts } = checkCrossGroupConflicts(grp.id, allNewStudents);
+
           const existing = grp.students || [];
-          const combined = [...existing, ...allNewStudents];
+          const combined = [...existing, ...valid];
           const seen = new Set();
           const unique = [];
           for (const s of combined) {
@@ -420,7 +493,16 @@
           const addedCount = unique.length - existing.length;
           grp.students = unique;
           renderGroups();
-          alert(`✅ ${processedCount} adet Excel dosyası başarıyla aktarıldı!\nEklenen Yeni Öğrenci: ${addedCount}\nGrubun Toplam Öğrenci Sayısı: ${unique.length}`);
+          let msg = `✅ ${processedCount} adet Excel dosyası başarıyla aktarıldı!\nEklenen Yeni Öğrenci: ${addedCount}\nGrubun Toplam Öğrenci Sayısı: ${unique.length}`;
+          if (conflicts.length > 0) {
+            msg += `\n\n⛔ Gruplar Arası Mükerrer Engeli (${conflicts.length} Öğrenci):\nAşağıdaki öğrenciler başka bir grupta zaten kayıtlı olduğu için bu gruba eklenmedi:\n` +
+              conflicts.slice(0, 8).map(c => `• ${c.name} (${c.no}) → "${c.groupName}" grubunda kayıtlı`).join('\n') +
+              (conflicts.length > 8 ? `\n...ve ${conflicts.length - 8} öğrenci daha.` : '');
+          }
+          if (errors.length > 0) {
+            msg += `\n\nUyarılar:\n` + errors.join('\n');
+          }
+          alert(msg);
         } else if (errors.length > 0) {
           alert('Dosyalar yüklenirken sorun oluştu:\n' + errors.join('\n'));
         }
@@ -457,6 +539,15 @@
         const groupId = card.dataset.groupId;
         const grp = state.groups.find(g => g.id === groupId);
         if (!grp) return;
+
+        // Başka bir grup bu salonu zaten seçti mi kontrol et
+        const otherGroup = state.groups.find(g => g.id !== groupId && g.selectedRoomIds.includes(roomId));
+        if (otherGroup) {
+          const room = state.classrooms.find(r => r.id === roomId);
+          const rName = room ? room.name : 'Seçilen derslik';
+          alert(`⛔ DERSLİK ÇAKIŞMA ENGELİ!\n\n"${rName}" salonu şu anda "${otherGroup.name}" tarafından seçilmiş durumdadır.\n\nAynı dersliğin birden fazla gruba atanması ve aynı salon için iki ayrı liste üretilmesi engellenmiştir. Lütfen bu grup için boşta olan bir derslik seçiniz.`);
+          return;
+        }
 
         if (grp.selectedRoomIds.includes(roomId)) {
           grp.selectedRoomIds = grp.selectedRoomIds.filter(id => id !== roomId);
@@ -531,7 +622,39 @@
       return;
     }
 
-    // KAPASİTE YETERLİLİK ÖN KONTROLÜ: Eksik liste üretilmesini engelle
+    // 1. DERSLİK ÇAKIŞMA KONTROLÜ: Aynı derslik iki farklı grupta seçilemez
+    const globalRoomMap = new Map();
+    for (const g of state.groups) {
+      for (const rid of g.selectedRoomIds) {
+        const room = state.classrooms.find(r => r.id === rid);
+        const rName = room ? room.name : rid;
+        if (globalRoomMap.has(rid)) {
+          const prevGroupName = globalRoomMap.get(rid);
+          alert(`⛔ ÇAKIŞAN DERSLİK TESPİT EDİLDİ!\n\n"${rName}" salonu hem "${prevGroupName}" hem de "${g.name}" grubu için seçilmiş.\n\nAynı dersliğin iki farklı gruba dağıtılması ve aynı salon için iki ayrı liste üretilmesi engellenmiştir. Lütfen her grup için farklı derslikler belirleyiniz.`);
+          return;
+        }
+        globalRoomMap.set(rid, g.name);
+      }
+    }
+
+    // 2. GRUPLAR ARASI MÜKERRER ÖĞRENCİ KONTROLÜ: Aynı öğrenci iki farklı grupta bulunamaz
+    const globalStudentRegistry = new Map();
+    for (const g of state.groups) {
+      for (const s of (g.students || [])) {
+        const sKey = (s.no && s.no.toString().trim() !== '')
+          ? `no_${s.no.toString().trim()}`
+          : `name_${(s.name || '').toString().trim().toLowerCase()}`;
+
+        if (globalStudentRegistry.has(sKey)) {
+          const prev = globalStudentRegistry.get(sKey);
+          alert(`⛔ MÜKERRER ÖĞRENCİ TESPİT EDİLDİ!\n\nÖğrenci: "${s.name}" (No: ${s.no || 'Yok'})\n\nBu öğrenci hem "${prev.groupName}" hem de "${g.name}" listesinde yer alıyor!\n\nBir öğrencinin iki kez sınava dağıtılmasını ve iki ayrı salonda listelenmesini engellemek için işlem durduruldu. Lütfen öğrenciyi tek bir gruba dahil ediniz.`);
+          return;
+        }
+        globalStudentRegistry.set(sKey, { groupName: g.name, name: s.name });
+      }
+    }
+
+    // 3. KAPASİTE YETERLİLİK ÖN KONTROLÜ: Eksik liste üretilmesini engelle
     for (const g of state.groups) {
       if (!g.students || g.students.length === 0) continue;
       const selectedRooms = state.classrooms.filter(c => g.selectedRoomIds.includes(c.id));

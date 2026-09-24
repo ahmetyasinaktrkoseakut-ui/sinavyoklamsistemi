@@ -305,6 +305,31 @@ body {
   box-shadow: 0 0 0 2px var(--primary);
 }
 
+.classroom-card.occupied {
+  opacity: 0.65;
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  cursor: not-allowed;
+}
+
+.classroom-card.occupied:hover {
+  border-color: #ef4444;
+}
+
+.classroom-occupied-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #b91c1c;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  padding: 2px 6px;
+  border-radius: 4px;
+  max-width: 110px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .classroom-card-header {
   display: flex;
   align-items: center;

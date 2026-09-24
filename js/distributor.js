@@ -163,6 +163,37 @@ window.Distributor = (function() {
     const results = [];
     const isSpecialCourse = isEligibleCourse(courseName);
 
+    // 1. Gruplar Arası Mükerrer Derslik Kontrolü (Aynı salon birden fazla gruba verilemez)
+    const globalRoomMap = new Map();
+    for (const group of groups) {
+      for (const room of (group.classrooms || [])) {
+        const roomKey = (room.id || room.name || '').toString().trim();
+        if (roomKey) {
+          if (globalRoomMap.has(roomKey)) {
+            const prevGroupName = globalRoomMap.get(roomKey);
+            throw new Error(`⛔ ÇAKIŞAN DERSLİK TESPİT EDİLDİ!\n\n"${room.name}" salonu hem "${prevGroupName}" hem de "${group.name}" grubu için seçilmiş.\n\nAynı dersliğin iki farklı gruba dağıtılması ve aynı salon için iki ayrı liste üretilmesi engellendi. Lütfen her grup için farklı derslikler belirleyiniz.`);
+          }
+          globalRoomMap.set(roomKey, group.name);
+        }
+      }
+    }
+
+    // 2. Gruplar Arası Mükerrer Öğrenci Kontrolü (Aynı öğrenci iki farklı grupta bulunamaz)
+    const globalStudentMap = new Map();
+    for (const group of groups) {
+      for (const s of (group.students || [])) {
+        const sKey = (s.no && s.no.toString().trim() !== '')
+          ? `no_${s.no.toString().trim()}`
+          : `name_${normalizeName(s.name)}`;
+        
+        if (globalStudentMap.has(sKey)) {
+          const prev = globalStudentMap.get(sKey);
+          throw new Error(`⛔ MÜKERRER ÖĞRENCİ TESPİT EDİLDİ!\n\nÖğrenci: "${s.name}" (No: ${s.no || 'Yok'})\n\nBu öğrenci hem "${prev.groupName}" hem de "${group.name}" gruplarında mevcut.\n\nBir öğrencinin iki kez sınava dağıtılmasını ve iki ayrı salonda listelenmesini engellemek için işlem durduruldu. Lütfen öğrenciyi tek bir gruba dahil ediniz.`);
+        }
+        globalStudentMap.set(sKey, { groupName: group.name, name: s.name });
+      }
+    }
+
     for (const group of groups) {
       if (!group.students || group.students.length === 0) continue;
       if (!group.classrooms || group.classrooms.length === 0) {
