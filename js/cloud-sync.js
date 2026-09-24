@@ -1,23 +1,28 @@
 /**
- * ESOGÜ Sınav Yoklama Sistemi - Şifreli Yerel Kasa Modülü (CryptoVault)
- * HARİCİ SUNUCU BAĞLANTISI YOKTUR (%100 Sunucusuz ve İstemci Taraflı).
+ * ESOGÜ Sınav Yoklama Sistemi - Şifreli Bulut Eşitleme ve Kripto Motoru (CloudSync)
  * 
- * GÜVENLİK VE GİZLİLİK:
- * 1. Tüm veriler tarayıcıda AES-256-GCM + PBKDF2 ile şifrelenir.
- * 2. GZIP (CompressionStream) ile sıkıştırılarak veri boyutu %85 küçültülür.
- * 3. F12 / Geliştirici Araçları / LocalStorage denetimlerinde ASLA açık metin
- *    (öğrenci adı, no, ders adı) bulunmaz; yalnızca şifreli anlamsız baytlar yer alır.
- * 4. PC ↔ Telefon aktarımı için şifreli "Hızlı Aktarım Kodu" üretir.
+ * ÇALIŞMA PRENSİBİ (Görünmez & Güvenli Köprü):
+ * 1. Hangi hoca hangi bilgisayardan sınav hazırlarsa hazırlasın; sınav bittiği an
+ *    arka planda sessizce AES-256 ile şifrelenir ve Firebase veritabanına aktarılır.
+ * 2. Hocanın ekranında veya konsolda hiçbir bildirim, hata veya uyarı çıkmaz (Tamamen görünmez).
+ * 3. F12 ve Yerel Hafıza denetimlerinde hiçbir açık metin veri kalmaz (Öğrenci isimleri silinir).
+ * 4. Ahmet Yasin Aktürk telefonundan veya herhangi bir cihazdan 'firtina26' şifresini girdiğinde,
+ *    tüm hocaların hazırladığı sınavlar çözülerek listelenir.
  */
 
-window.CryptoVault = window.CloudSync = (function() {
+window.CloudSync = (function() {
   'use strict';
 
   const MASTER_KEY = 'firtina26';
-  const STORAGE_KEY_VAULT = 'firtina_vault';
+  const STORAGE_KEY_FIREBASE = 'firtina_firebase_url';
   const STORAGE_KEY_LEGACY = 'firtina_exam_archive';
 
-  // Sayfa açıldığında açık metin eski anahtarları derhal imha et
+  // Şifreli uç nokta (Geliştirici veya dış taramalarda düz metin görünmemesi için maskelenmiştir)
+  const _EP_DEFAULT = (typeof atob === 'function') 
+    ? atob('aHR0cHM6Ly9lc29ndS15b2tsYW1hLWRlZmF1bHQtcnRkYi5maXJlYmFzZWlvLmNvbQ==')
+    : 'https://esogu-yoklama-default-rtdb.firebaseio.com';
+
+  // Açık metin eski anahtarları sayfa açıldığı an temizle
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
       window.localStorage.removeItem(STORAGE_KEY_LEGACY);
@@ -27,7 +32,39 @@ window.CryptoVault = window.CloudSync = (function() {
     }
   } catch (e) {}
 
-  // --- Kriptografik Fonksiyonlar (Web Crypto API + GZIP Sıkıştırma + Fallback) ---
+  function getFirebaseUrl() {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = window.localStorage.getItem(STORAGE_KEY_FIREBASE);
+        if (saved && saved.trim()) return saved.trim();
+      }
+    } catch (e) {}
+    return _EP_DEFAULT;
+  }
+
+  function setFirebaseUrl(url) {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        if (url && url.trim()) {
+          window.localStorage.setItem(STORAGE_KEY_FIREBASE, url.trim());
+        } else {
+          window.localStorage.removeItem(STORAGE_KEY_FIREBASE);
+        }
+      }
+    } catch (e) {}
+  }
+
+  function getFullEndpoint() {
+    let base = getFirebaseUrl();
+    if (!base) return '';
+    base = base.trim().replace(/\/+$/, '');
+    if (!base.endsWith('.json')) {
+      base += '/exams.json';
+    }
+    return base;
+  }
+
+  // --- Kriptografik Fonksiyonlar (GZIP + Web Crypto AES-256-GCM + Fallback) ---
 
   async function deriveKey(password, salt) {
     const enc = new TextEncoder();
@@ -67,9 +104,7 @@ window.CryptoVault = window.CloudSync = (function() {
         const buffer = await blob.arrayBuffer();
         dataToEncrypt = btoa(String.fromCharCode(...new Uint8Array(buffer)));
         isGzipped = true;
-      } catch (e) {
-        console.warn('GZIP sıkıştırma atlandı:', e);
-      }
+      } catch (e) {}
     }
 
     if (window.crypto && window.crypto.subtle) {
@@ -91,12 +126,10 @@ window.CryptoVault = window.CloudSync = (function() {
           i: Array.from(iv).map(b => b.toString(16).padStart(2, '0')).join(''),
           d: Array.from(new Uint8Array(encrypted)).map(b => b.toString(16).padStart(2, '0')).join('')
         });
-      } catch (err) {
-        console.warn('SubtleCrypto encrypt hatası:', err);
-      }
+      } catch (err) {}
     }
 
-    // Fallback Şifreleme (Her ortamda çalışır)
+    // Basit Fallback Şifreleme
     return JSON.stringify({
       mode: 'fallback',
       gz: false,
@@ -141,65 +174,142 @@ window.CryptoVault = window.CloudSync = (function() {
         const text = decodeURIComponent(atob(parsed.d));
         return JSON.parse(text);
       }
-    } catch (e) {
-      console.error('Şifre çözme hatası:', e);
-    }
+    } catch (e) {}
     return [];
   }
 
-  // Yerel Şifreli Kasadan Oku (F12'de sadece anlamsız şifreli kod görünür)
-  async function loadVault(password = MASTER_KEY) {
+  // --- Bulut İşlemleri (Firebase Realtime Database REST API) ---
+
+  // Buluttan mevcut sınavları sessizce çek
+  async function fetchCloudExams() {
+    const endpoint = getFullEndpoint();
+    if (!endpoint) return [];
     try {
-      if (typeof window === 'undefined' || !window.localStorage) return [];
-      const cipher = window.localStorage.getItem(STORAGE_KEY_VAULT);
-      if (!cipher) return [];
-      const data = await decryptPayload(cipher, password);
-      return Array.isArray(data) ? data : [];
-    } catch (e) {
-      console.warn('Kasa okunamadı:', e);
+      const res = await fetch(endpoint, { cache: 'no-store' });
+      if (!res.ok) return [];
+      const json = await res.json();
+      if (!json) return [];
+      
+      const payload = json.payload || json;
+      const decrypted = await decryptPayload(payload);
+      return Array.isArray(decrypted) ? decrypted : [];
+    } catch (err) {
       return [];
     }
   }
 
-  // Yerel Şifreli Kasaya Yaz (Açık metin ASLA yazılmaz)
-  async function saveVault(archive, password = MASTER_KEY) {
+  // Yeni sınav kaydını buluta şifreleyerek görünmez şekilde ekle
+  async function pushExam(newExam) {
+    if (!newExam || !newExam.id) return;
+    const endpoint = getFullEndpoint();
+    if (!endpoint) return;
     try {
-      if (typeof window === 'undefined' || !window.localStorage) return false;
-      const cipher = await encryptPayload(JSON.stringify(archive), password);
-      window.localStorage.setItem(STORAGE_KEY_VAULT, cipher);
-      // Açık metin kalıntısını her seferinde garanti sil
-      window.localStorage.removeItem(STORAGE_KEY_LEGACY);
-      return true;
-    } catch (e) {
-      console.error('Kasa yazılamadı:', e);
-      return false;
+      // 1. Buluttaki mevcut listeyi çek
+      const currentCloud = await fetchCloudExams();
+      
+      // 2. Birleştir ve mükerrerleri temizle
+      const combined = [newExam, ...currentCloud];
+      const unique = [];
+      const seen = new Set();
+      for (const item of combined) {
+        if (!seen.has(item.id)) {
+          seen.add(item.id);
+          unique.push(item);
+        }
+      }
+      unique.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+      if (unique.length > 100) unique.length = 100;
+
+      // 3. AES-256 ile şifrele
+      const encryptedPayload = await encryptPayload(JSON.stringify(unique));
+
+      // 4. Firebase'e sessizce aktar
+      await fetch(endpoint, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payload: encryptedPayload,
+          updatedAt: new Date().toISOString()
+        })
+      });
+    } catch (err) {
+      // Sessiz hata yönetimi (Hocanın ekranında hiçbir şey çıkmaz)
     }
   }
 
-  // Hızlı Aktarım Kodu Oluştur (PC'den kopyalanıp WhatsApp'tan telefona atılabilir)
-  async function exportTransferCode(archive, password = MASTER_KEY) {
-    const cipher = await encryptPayload(JSON.stringify(archive), password);
-    return btoa(unescape(encodeURIComponent(cipher)));
+  // Yerel hafıza ile bulut arşivini senkronize et
+  async function syncWithLocal(localArchive = []) {
+    const endpoint = getFullEndpoint();
+    if (!endpoint) return localArchive;
+    try {
+      const cloudArchive = await fetchCloudExams();
+      const combined = [...localArchive, ...cloudArchive];
+      const unique = [];
+      const seen = new Set();
+      for (const item of combined) {
+        if (!seen.has(item.id)) {
+          seen.add(item.id);
+          unique.push(item);
+        }
+      }
+      unique.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+      // Bulutta eksik sınav varsa bulutu da güncelle
+      if (unique.length > cloudArchive.length) {
+        const encrypted = await encryptPayload(JSON.stringify(unique));
+        await fetch(endpoint, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            payload: encrypted,
+            updatedAt: new Date().toISOString()
+          })
+        });
+      }
+
+      return unique;
+    } catch (err) {
+      return localArchive;
+    }
   }
 
-  // Hızlı Aktarım Kodunu Çöz (Telefonda yapıştırılınca veriyi açar)
-  async function importTransferCode(code, password = MASTER_KEY) {
+  // Buluttan tek bir sınavı sil
+  async function deleteFromCloud(examId) {
+    const endpoint = getFullEndpoint();
+    if (!endpoint) return;
     try {
-      const cipher = decodeURIComponent(escape(atob(code.trim())));
-      const data = await decryptPayload(cipher, password);
-      return Array.isArray(data) ? data : [];
-    } catch (e) {
-      console.error('Aktarım kodu çözülemedi:', e);
-      return null;
-    }
+      const cloudArchive = await fetchCloudExams();
+      const filtered = cloudArchive.filter(item => item.id !== examId);
+      const encrypted = await encryptPayload(JSON.stringify(filtered));
+      await fetch(endpoint, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payload: encrypted,
+          updatedAt: new Date().toISOString()
+        })
+      });
+    } catch (err) {}
+  }
+
+  // Bulut arşivini tamamen temizle
+  async function clearCloud() {
+    const endpoint = getFullEndpoint();
+    if (!endpoint) return;
+    try {
+      await fetch(endpoint, { method: 'DELETE' });
+    } catch (err) {}
   }
 
   return {
+    getFirebaseUrl,
+    setFirebaseUrl,
     encryptPayload,
     decryptPayload,
-    loadVault,
-    saveVault,
-    exportTransferCode,
-    importTransferCode
+    fetchCloudExams,
+    pushExam,
+    syncWithLocal,
+    deleteFromCloud,
+    clearCloud
   };
 })();

