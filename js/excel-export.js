@@ -19,7 +19,7 @@ window.ExcelExporter = (function() {
   /**
    * Dağıtım sonuçlarını resmi Excel şablonu formatında oluşturur ve indirir
    */
-  function generate({ courseName, examDate, examTitle, results, academicYear = '2025-2026 EĞİTİM-ÖĞRETİM YILI BAHAR YARIYILI' }) {
+  function generate({ courseName, examDate, examTitle, results, academicYear = '' }) {
     if (typeof XLSX === 'undefined') {
       throw new Error('Excel kütüphanesi (XLSX) yüklenemedi.');
     }
@@ -28,7 +28,7 @@ window.ExcelExporter = (function() {
     const merges = [];
 
     let currentRow = 0; // 0-indexed
-    const headerSuffix = (examTitle || '').trim() || `${academicYear} FİNAL SINAVI YOKLAMA LİSTESİ`;
+    const headerSuffix = (examTitle || '').trim() || (academicYear ? `${academicYear} FİNAL SINAVI YOKLAMA LİSTESİ` : 'FİNAL SINAVI YOKLAMA LİSTESİ');
     const titleText = `ESKİŞEHİR OSMANGAZİ ÜNİVERSİTESİ İLAHİYAT FAKÜLTESİ ${headerSuffix}`;
 
     for (let rIdx = 0; rIdx < results.length; rIdx++) {

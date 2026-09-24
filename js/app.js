@@ -17,13 +17,13 @@
   const state = {
     courseName: '',
     examDate: '',
-    examTitle: '2025-2026 EĞİTİM-ÖĞRETİM YILI BAHAR YARIYILI FİNAL SINAVI YOKLAMA LİSTESİ',
-    academicYear: '2025-2026 EĞİTİM-ÖĞRETİM YILI BAHAR YARIYILI',
+    examTitle: '',
+    academicYear: '',
     classrooms: window.Distributor.getDefaultClassrooms(),
     groups: [
       {
         id: 'group-1',
-        name: 'Grup 1 (2. Sınıf)',
+        name: 'Grup 1',
         students: [],
         selectedRoomIds: ['derslik-1', 'derslik-2', 'derslik-3']
       }
@@ -494,9 +494,9 @@
     // Özel Salon Ekleme
     document.querySelectorAll('.add-custom-room-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const name = prompt('Yeni Derslik / Salon Adı (Örn: DERSLİK 19):');
+        const name = prompt('Yeni Derslik / Salon Adı:');
         if (!name) return;
-        const cap = prompt(`"${name}" Kontenjanı:`, '30');
+        const cap = prompt(`"${name}" Kontenjanı:`, '');
         const capNum = parseInt(cap, 10) || 30;
 
         const newId = 'custom-' + Date.now();
@@ -652,7 +652,7 @@
       <div class="print-page">
         <div style="text-align: center; margin-bottom: 12px;">
           <h2 style="font-size: 13pt; margin-bottom: 4px;">ESKİŞEHİR OSMANGAZİ ÜNİVERSİTESİ İLAHİYAT FAKÜLTESİ</h2>
-          <h3 style="font-size: 11pt;">${(state.examTitle || '').trim() || `${state.academicYear} FİNAL SINAVI YOKLAMA LİSTESİ`}</h3>
+          <h3 style="font-size: 11pt;">${(state.examTitle || '').trim() || (state.academicYear ? `${state.academicYear} FİNAL SINAVI YOKLAMA LİSTESİ` : 'FİNAL SINAVI YOKLAMA LİSTESİ')}</h3>
         </div>
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 10pt;">
           <tr>
