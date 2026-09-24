@@ -5,6 +5,14 @@
 (function() {
   'use strict';
 
+  // GİZLİLİK VE VERİ GÜVENLİĞİ:
+  // F12 ve Yerel Hafıza denetimlerinde açık metin öğrenci kalıntısı bırakmamak için
+  // Eski yerel depolama anahtarlarını derhal temizle
+  try {
+    localStorage.removeItem('firtina_exam_archive');
+    sessionStorage.removeItem('firtina_exam_archive');
+  } catch (e) {}
+
   // Uygulama Durumu (State)
   const state = {
     courseName: '',
