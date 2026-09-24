@@ -674,17 +674,24 @@ body {
     color: #000;
   }
   
-  .header, .step-card, .footer, .btn, .result-tabs, .no-print {
+  /* Çıktıda yalnızca sınav sayfaları görünür; kılavuz, butonlar ve modallar tamamen gizlenir */
+  body > *:not(.print-only),
+  .header, .step-card, .footer, .btn, .result-tabs, .no-print,
+  .guide-floating-btn, #floatingGuideBtn, .modal-overlay, .guide-modal-overlay, #guideModal, #adminModalOverlay {
     display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
   }
   
   .print-only {
     display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
   }
   
   .print-page {
     page-break-after: always;
-    padding: 20mm 15mm;
+    padding: 15mm 12mm;
   }
   
   .print-table {
