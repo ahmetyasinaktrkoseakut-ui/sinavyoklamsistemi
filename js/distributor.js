@@ -179,18 +179,23 @@ window.Distributor = (function() {
     }
 
     // 2. Gruplar Arası Mükerrer Öğrenci Kontrolü (Aynı öğrenci iki farklı grupta bulunamaz)
+    // KURAL: Sadece hem isim hem de numara tutarsa mükerrer kabul edilir. Numarası farklı olan aynı isimli öğrenciler farklı kişilerdir.
     const globalStudentMap = new Map();
     for (const group of groups) {
       for (const s of (group.students || [])) {
-        const sKey = (s.no && s.no.toString().trim() !== '')
-          ? `no_${s.no.toString().trim()}`
-          : `name_${normalizeName(s.name)}`;
+        const normNo = (s.no || '').toString().trim();
+        const normName = normalizeName(s.name);
+        const sKey = (normNo && normName)
+          ? `both_${normNo}_${normName}`
+          : (normNo ? `no_${normNo}` : `name_${normName}`);
         
-        if (globalStudentMap.has(sKey)) {
-          const prev = globalStudentMap.get(sKey);
-          throw new Error(`⛔ MÜKERRER ÖĞRENCİ TESPİT EDİLDİ!\n\nÖğrenci: "${s.name}" (No: ${s.no || 'Yok'})\n\nBu öğrenci hem "${prev.groupName}" hem de "${group.name}" gruplarında mevcut.\n\nBir öğrencinin iki kez sınava dağıtılmasını ve iki ayrı salonda listelenmesini engellemek için işlem durduruldu. Lütfen öğrenciyi tek bir gruba dahil ediniz.`);
+        if (sKey) {
+          if (globalStudentMap.has(sKey)) {
+            const prev = globalStudentMap.get(sKey);
+            throw new Error(`⛔ MÜKERRER ÖĞRENCİ TESPİT EDİLDİ!\n\nÖğrenci: "${s.name}" (No: ${s.no || 'Yok'})\n\nBu öğrenci hem "${prev.groupName}" hem de "${group.name}" gruplarında mevcut.\n\nBir öğrencinin iki kez sınava dağıtılmasını ve iki ayrı salonda listelenmesini engellemek için işlem durduruldu. Lütfen öğrenciyi tek bir gruba dahil ediniz.`);
+          }
+          globalStudentMap.set(sKey, { groupName: group.name, name: s.name });
         }
-        globalStudentMap.set(sKey, { groupName: group.name, name: s.name });
       }
     }
 

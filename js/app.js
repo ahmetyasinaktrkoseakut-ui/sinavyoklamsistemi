@@ -190,7 +190,40 @@
       });
     });
 
-    // Gruplar arası mükerrer öğrenci denetimi (Aynı öğrenci başka bir grupta var mı?)
+    // İsim normalizasyonu (Türkçe karakterleri eşitleme)
+    function normalizeStudentName(str) {
+      if (!str) return '';
+      return str
+        .toString()
+        .trim()
+        .replace(/İ/g, 'i')
+        .replace(/I/g, 'ı')
+        .toLowerCase()
+        .replace(/ğ/g, 'g')
+        .replace(/ü/g, 'u')
+        .replace(/ş/g, 's')
+        .replace(/ö/g, 'o')
+        .replace(/ç/g, 'c')
+        .replace(/ı/g, 'i')
+        .replace(/\s+/g, ' ');
+    }
+
+    // Öğrenci benzersiz anahtarı:
+    // Kullanıcı kuralı: Sadece HEM İSİM HEM NUMARA birlikte tutarsa mükerrer kabul edilir.
+    // Numarası farklı olan aynı isimli öğrenciler farklı kişilerdir ve kabul edilir.
+    function getStudentUniqueKey(s) {
+      const no = (s.no || '').toString().trim();
+      const name = normalizeStudentName(s.name);
+      if (no && name) {
+        return `both_${no}_${name}`;
+      }
+      if (no) {
+        return `no_${no}`;
+      }
+      return `name_${name}`;
+    }
+
+    // Gruplar arası mükerrer öğrenci denetimi (Hem isim hem numara eşleşirse engelle)
     function checkCrossGroupConflicts(targetGroupId, newStudents) {
       const conflicts = [];
       const valid = [];
@@ -199,27 +232,16 @@
       for (const g of state.groups) {
         if (g.id === targetGroupId) continue;
         for (const s of (g.students || [])) {
-          const noKey = (s.no || '').toString().trim();
-          if (noKey) {
-            registry.set(`no_${noKey}`, g.name);
-          }
-          const nameKey = (s.name || '').toString().trim().toLowerCase();
-          if (nameKey) {
-            registry.set(`name_${nameKey}`, g.name);
+          const key = getStudentUniqueKey(s);
+          if (key) {
+            registry.set(key, g.name);
           }
         }
       }
 
       for (const s of newStudents) {
-        const noKey = (s.no || '').toString().trim();
-        const nameKey = (s.name || '').toString().trim().toLowerCase();
-
-        let conflictingGroupName = null;
-        if (noKey && registry.has(`no_${noKey}`)) {
-          conflictingGroupName = registry.get(`no_${noKey}`);
-        } else if (nameKey && registry.has(`name_${nameKey}`)) {
-          conflictingGroupName = registry.get(`name_${nameKey}`);
-        }
+        const key = getStudentUniqueKey(s);
+        let conflictingGroupName = (key && registry.has(key)) ? registry.get(key) : null;
 
         if (conflictingGroupName) {
           conflicts.push({
@@ -253,8 +275,9 @@
         const seen = new Set();
         const unique = [];
         for (const s of combined) {
-          if (!seen.has(s.no)) {
-            seen.add(s.no);
+          const uKey = getStudentUniqueKey(s);
+          if (uKey && !seen.has(uKey)) {
+            seen.add(uKey);
             unique.push(s);
           }
         }
@@ -465,8 +488,9 @@
           const seen = new Set();
           const unique = [];
           for (const s of combined) {
-            if (!seen.has(s.no)) {
-              seen.add(s.no);
+            const uKey = getStudentUniqueKey(s);
+            if (uKey && !seen.has(uKey)) {
+              seen.add(uKey);
               unique.push(s);
             }
           }
@@ -533,8 +557,9 @@
           const seen = new Set();
           const unique = [];
           for (const s of combined) {
-            if (!seen.has(s.no)) {
-              seen.add(s.no);
+            const uKey = getStudentUniqueKey(s);
+            if (uKey && !seen.has(uKey)) {
+              seen.add(uKey);
               unique.push(s);
             }
           }
@@ -689,9 +714,11 @@
     const globalStudentRegistry = new Map();
     for (const g of state.groups) {
       for (const s of (g.students || [])) {
-        const sKey = (s.no && s.no.toString().trim() !== '')
-          ? `no_${s.no.toString().trim()}`
-          : `name_${(s.name || '').toString().trim().toLowerCase()}`;
+        const normNo = (s.no || '').toString().trim();
+        const normName = normalizeStudentName(s.name);
+        const sKey = (normNo && normName)
+          ? `both_${normNo}_${normName}`
+          : (normNo ? `no_${normNo}` : `name_${normName}`);
 
         if (globalStudentRegistry.has(sKey)) {
           const prev = globalStudentRegistry.get(sKey);

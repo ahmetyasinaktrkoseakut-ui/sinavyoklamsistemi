@@ -263,13 +263,16 @@ window.Parsers = (function() {
     return parsePastedText(fullText);
   }
 
-  // Mükerrer öğrencileri numaraya göre filtreleme
+  // Mükerrer öğrencileri filtreleme (Hem numara hem isim birlikte kontrol edilir)
   function deduplicateStudents(students) {
     const seen = new Set();
     const result = [];
     for (let s of students) {
-      if (!seen.has(s.no)) {
-        seen.add(s.no);
+      const no = (s.no || '').toString().trim();
+      const name = (s.name || '').toString().trim().toLowerCase();
+      const key = (no && name) ? `both_${no}_${name}` : (no ? `no_${no}` : `name_${name}`);
+      if (key && !seen.has(key)) {
+        seen.add(key);
         result.push(s);
       }
     }
