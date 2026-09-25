@@ -812,7 +812,8 @@ body {
   border: 1px solid #bfdbfe;
   border-radius: 10px;
   overflow: hidden;
-  margin-bottom: 16px;
+  max-width: 440px;
+  margin: 0 auto 16px auto;
   box-shadow: 0 2px 8px rgba(30, 58, 138, 0.08);
 }
 
