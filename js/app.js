@@ -116,8 +116,56 @@
     const elHeaderGuideBtn = document.getElementById('headerGuideBtn');
     const elFloatingGuideBtn = document.getElementById('floatingGuideBtn');
 
+    const elGuideVideo = document.getElementById('guideVideoPlayer');
+    const elLightboxModal = document.getElementById('videoLightboxModal');
+    const elLightboxVideo = document.getElementById('lightboxVideoPlayer');
+    const elVideoExpandBtn = document.getElementById('guideVideoExpandBtn');
+    const elVideoClickHint = document.getElementById('videoClickExpandHint');
+    const elLightboxCloseBtn = document.getElementById('videoLightboxCloseBtn');
+
+    function openVideoLightbox() {
+      if (!elLightboxModal || !elLightboxVideo) return;
+      if (elGuideVideo) {
+        elLightboxVideo.currentTime = elGuideVideo.currentTime;
+        elGuideVideo.pause();
+      }
+      elLightboxModal.style.display = 'flex';
+      elLightboxVideo.play().catch(() => {});
+    }
+
+    function closeVideoLightbox() {
+      if (!elLightboxModal || !elLightboxVideo) return;
+      if (elGuideVideo) {
+        elGuideVideo.currentTime = elLightboxVideo.currentTime;
+      }
+      elLightboxVideo.pause();
+      elLightboxModal.style.display = 'none';
+    }
+
+    if (elVideoExpandBtn) elVideoExpandBtn.addEventListener('click', openVideoLightbox);
+    if (elVideoClickHint) {
+      elVideoClickHint.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openVideoLightbox();
+      });
+    }
+    if (elLightboxCloseBtn) elLightboxCloseBtn.addEventListener('click', closeVideoLightbox);
+    if (elLightboxModal) {
+      elLightboxModal.addEventListener('click', (e) => {
+        if (e.target === elLightboxModal) closeVideoLightbox();
+      });
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && elLightboxModal && elLightboxModal.style.display === 'flex') {
+        closeVideoLightbox();
+      }
+    });
+
     function closeGuide() {
       if (elGuideModal) elGuideModal.style.display = 'none';
+      if (elGuideVideo) elGuideVideo.pause();
+      closeVideoLightbox();
     }
 
     function openGuide() {

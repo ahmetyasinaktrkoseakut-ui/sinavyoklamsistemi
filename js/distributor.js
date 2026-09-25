@@ -5,7 +5,7 @@
 window.Distributor = (function() {
   'use strict';
 
-  // Varsayılan Fakülte Salon Havuzu
+  // Varsayılan Fakülte Salon Havuzu (AMFİ 1-2 ve DERSLİK 1'den 18'e kadar sıralı)
   const DEFAULT_CLASSROOMS = [
     { id: 'amfi-1', name: 'AMFİ 1', defaultCapacity: 24 },
     { id: 'amfi-2', name: 'AMFİ 2', defaultCapacity: 24 },
@@ -13,12 +13,6 @@ window.Distributor = (function() {
     { id: 'derslik-2', name: 'DERSLİK 2', defaultCapacity: 36 },
     { id: 'derslik-3', name: 'DERSLİK 3', defaultCapacity: 36 },
     { id: 'derslik-4', name: 'DERSLİK 4', defaultCapacity: 36 },
-    { id: 'derslik-15', name: 'DERSLİK 15', defaultCapacity: 36 },
-    { id: 'derslik-18', name: 'DERSLİK 18', defaultCapacity: 39, altCapacity: 45 },
-    { id: 'derslik-13', name: 'DERSLİK 13', defaultCapacity: 20 },
-    { id: 'derslik-14', name: 'DERSLİK 14', defaultCapacity: 20 },
-    { id: 'derslik-16', name: 'DERSLİK 16', defaultCapacity: 20 },
-    { id: 'derslik-17', name: 'DERSLİK 17', defaultCapacity: 20 },
     { id: 'derslik-5', name: 'DERSLİK 5', defaultCapacity: 36 },
     { id: 'derslik-6', name: 'DERSLİK 6', defaultCapacity: 36 },
     { id: 'derslik-7', name: 'DERSLİK 7', defaultCapacity: 36 },
@@ -26,7 +20,13 @@ window.Distributor = (function() {
     { id: 'derslik-9', name: 'DERSLİK 9', defaultCapacity: 36 },
     { id: 'derslik-10', name: 'DERSLİK 10', defaultCapacity: 36 },
     { id: 'derslik-11', name: 'DERSLİK 11', defaultCapacity: 36 },
-    { id: 'derslik-12', name: 'DERSLİK 12', defaultCapacity: 36 }
+    { id: 'derslik-12', name: 'DERSLİK 12', defaultCapacity: 36 },
+    { id: 'derslik-13', name: 'DERSLİK 13', defaultCapacity: 20 },
+    { id: 'derslik-14', name: 'DERSLİK 14', defaultCapacity: 20 },
+    { id: 'derslik-15', name: 'DERSLİK 15', defaultCapacity: 36 },
+    { id: 'derslik-16', name: 'DERSLİK 16', defaultCapacity: 20 },
+    { id: 'derslik-17', name: 'DERSLİK 17', defaultCapacity: 20 },
+    { id: 'derslik-18', name: 'DERSLİK 18', defaultCapacity: 39, altCapacity: 45 }
   ];
 
   function getDefaultClassrooms() {
