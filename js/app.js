@@ -44,6 +44,73 @@
     renderGroups();
   });
 
+  // İsim normalizasyonu (Türkçe karakterleri eşitleme)
+  function normalizeStudentName(str) {
+    if (!str) return '';
+    return str
+      .toString()
+      .trim()
+      .replace(/İ/g, 'i')
+      .replace(/I/g, 'ı')
+      .toLowerCase()
+      .replace(/ğ/g, 'g')
+      .replace(/ü/g, 'u')
+      .replace(/ş/g, 's')
+      .replace(/ö/g, 'o')
+      .replace(/ç/g, 'c')
+      .replace(/ı/g, 'i')
+      .replace(/\s+/g, ' ');
+  }
+
+  // Öğrenci benzersiz anahtarı:
+  // Kullanıcı kuralı: Sadece HEM İSİM HEM NUMARA birlikte tutarsa mükerrer kabul edilir.
+  // Numarası farklı olan aynı isimli öğrenciler farklı kişilerdir ve kabul edilir.
+  function getStudentUniqueKey(s) {
+    const no = (s.no || '').toString().trim();
+    const name = normalizeStudentName(s.name);
+    if (no && name) {
+      return `both_${no}_${name}`;
+    }
+    if (no) {
+      return `no_${no}`;
+    }
+    return `name_${name}`;
+  }
+
+  // Gruplar arası mükerrer öğrenci denetimi (Hem isim hem numara eşleşirse engelle)
+  function checkCrossGroupConflicts(targetGroupId, newStudents) {
+    const conflicts = [];
+    const valid = [];
+
+    const registry = new Map();
+    for (const g of state.groups) {
+      if (g.id === targetGroupId) continue;
+      for (const s of (g.students || [])) {
+        const key = getStudentUniqueKey(s);
+        if (key) {
+          registry.set(key, g.name);
+        }
+      }
+    }
+
+    for (const s of newStudents) {
+      const key = getStudentUniqueKey(s);
+      let conflictingGroupName = (key && registry.has(key)) ? registry.get(key) : null;
+
+      if (conflictingGroupName) {
+        conflicts.push({
+          no: s.no || 'Yok',
+          name: s.name,
+          groupName: conflictingGroupName
+        });
+      } else {
+        valid.push(s);
+      }
+    }
+
+    return { valid, conflicts };
+  }
+
   function initElements() {
     elCourseName = document.getElementById('courseName');
     elExamDate = document.getElementById('examDate');
@@ -189,73 +256,6 @@
         if (elPasteModal) elPasteModal.style.display = 'none';
       });
     });
-
-    // İsim normalizasyonu (Türkçe karakterleri eşitleme)
-    function normalizeStudentName(str) {
-      if (!str) return '';
-      return str
-        .toString()
-        .trim()
-        .replace(/İ/g, 'i')
-        .replace(/I/g, 'ı')
-        .toLowerCase()
-        .replace(/ğ/g, 'g')
-        .replace(/ü/g, 'u')
-        .replace(/ş/g, 's')
-        .replace(/ö/g, 'o')
-        .replace(/ç/g, 'c')
-        .replace(/ı/g, 'i')
-        .replace(/\s+/g, ' ');
-    }
-
-    // Öğrenci benzersiz anahtarı:
-    // Kullanıcı kuralı: Sadece HEM İSİM HEM NUMARA birlikte tutarsa mükerrer kabul edilir.
-    // Numarası farklı olan aynı isimli öğrenciler farklı kişilerdir ve kabul edilir.
-    function getStudentUniqueKey(s) {
-      const no = (s.no || '').toString().trim();
-      const name = normalizeStudentName(s.name);
-      if (no && name) {
-        return `both_${no}_${name}`;
-      }
-      if (no) {
-        return `no_${no}`;
-      }
-      return `name_${name}`;
-    }
-
-    // Gruplar arası mükerrer öğrenci denetimi (Hem isim hem numara eşleşirse engelle)
-    function checkCrossGroupConflicts(targetGroupId, newStudents) {
-      const conflicts = [];
-      const valid = [];
-
-      const registry = new Map();
-      for (const g of state.groups) {
-        if (g.id === targetGroupId) continue;
-        for (const s of (g.students || [])) {
-          const key = getStudentUniqueKey(s);
-          if (key) {
-            registry.set(key, g.name);
-          }
-        }
-      }
-
-      for (const s of newStudents) {
-        const key = getStudentUniqueKey(s);
-        let conflictingGroupName = (key && registry.has(key)) ? registry.get(key) : null;
-
-        if (conflictingGroupName) {
-          conflicts.push({
-            no: s.no || 'Yok',
-            name: s.name,
-            groupName: conflictingGroupName
-          });
-        } else {
-          valid.push(s);
-        }
-      }
-
-      return { valid, conflicts };
-    }
 
     // Pano Onayla
     elPasteConfirmBtn.addEventListener('click', () => {
@@ -746,8 +746,9 @@
       const assignedRooms = g.selectedRoomIds.map(rid => {
         const r = state.classrooms.find(c => c.id === rid);
         return {
-          name: r.name,
-          capacity: r.defaultCapacity
+          id: r ? r.id : rid,
+          name: r ? r.name : rid,
+          capacity: r ? r.defaultCapacity : 0
         };
       });
 
