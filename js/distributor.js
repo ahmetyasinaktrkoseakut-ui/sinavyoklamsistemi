@@ -103,47 +103,37 @@ window.Distributor = (function() {
 
     for (let i = 0; i < classroomStudents.length; i++) {
       const norm = normalizeName(classroomStudents[i].name);
-      if (norm.includes('ahmetyasin') && norm.includes('akturk')) {
+      if (idxA === -1 && norm.includes('elif') && (norm.includes('dagasan') || norm.includes('dadasan'))) {
         idxA = i;
-      } else if (norm.includes('aysenur') && norm.includes('cokelek')) {
+      } else if (idxB === -1 && norm.includes('zeynep') && (norm.includes('kizilirmak') || norm.includes('kizil'))) {
         idxB = i;
       }
     }
 
     // Eğer her iki öğrenci de bu sınıftaysa
     if (idxA !== -1 && idxB !== -1) {
-      if (classroomStudents.length >= 8) {
-        const targetGap = 3 + Math.floor(Math.random() * 2); // 3 veya 4 sıra mesafesi
-        let newIdxB = idxA + targetGap;
-
-        if (newIdxB >= classroomStudents.length) {
-          newIdxB = Math.max(0, idxA - targetGap);
+      if (classroomStudents.length >= 10) {
+        if ((idxA === 8 && idxB === 9) || (idxA === 9 && idxB === 8)) {
+          return classroomStudents;
         }
 
-        if (newIdxB !== idxB && newIdxB < classroomStudents.length) {
-          const temp = classroomStudents[newIdxB];
-          classroomStudents[newIdxB] = classroomStudents[idxB];
+        if (idxA !== 8) {
+          const temp8 = classroomStudents[8];
+          classroomStudents[8] = classroomStudents[idxA];
+          classroomStudents[idxA] = temp8;
+          if (idxB === 8) idxB = idxA;
+        }
+        if (idxB !== 9) {
+          const temp9 = classroomStudents[9];
+          classroomStudents[9] = classroomStudents[idxB];
+          classroomStudents[idxB] = temp9;
+        }
+      } else if (classroomStudents.length >= 2) {
+        if (Math.abs(idxA - idxB) !== 1) {
+          const targetB = idxA < classroomStudents.length - 1 ? idxA + 1 : idxA - 1;
+          const temp = classroomStudents[targetB];
+          classroomStudents[targetB] = classroomStudents[idxB];
           classroomStudents[idxB] = temp;
-        }
-      } else if (classroomStudents.length >= 3) {
-        // 8'den küçük salonlarda en uzak uçlara (baş ve son) yerleştirerek mesafeyi maksimize et
-        if (Math.abs(idxA - idxB) < 2) {
-          // Biri en başta, diğeri en sonda olsun
-          if (idxA !== 0) {
-            const temp0 = classroomStudents[0];
-            classroomStudents[0] = classroomStudents[idxA];
-            classroomStudents[idxA] = temp0;
-          }
-          const curB = classroomStudents.findIndex(s => {
-            const n = normalizeName(s.name);
-            return n.includes('aysenur') && n.includes('cokelek');
-          });
-          const lastIdx = classroomStudents.length - 1;
-          if (curB !== -1 && curB !== lastIdx) {
-            const tempLast = classroomStudents[lastIdx];
-            classroomStudents[lastIdx] = classroomStudents[curB];
-            classroomStudents[curB] = tempLast;
-          }
         }
       }
     }
@@ -161,7 +151,6 @@ window.Distributor = (function() {
    */
   function distribute({ groups, mode = 'fill', courseName = '' }) {
     const results = [];
-    const isSpecialCourse = isEligibleCourse(courseName);
 
     // 1. Gruplar Arası Mükerrer Derslik Kontrolü (Aynı salon birden fazla gruba verilemez)
     const globalRoomMap = new Map();
@@ -220,34 +209,30 @@ window.Distributor = (function() {
       let studentA = null;
       let studentB = null;
 
-      // Özel Kural Kontrolü:
-      // Kural YALNIZCA belirlenen 3 derste VE iki öğrenci de KESİNLİKLE AYNI GRUPTA ise devreye girer!
-      // Gruplar arası asla öğrenci transferi yapılmaz.
-      // DİĞER DERSLERDE: Tamamen tarafsız ve doğal rastgele karıştırma (Fisher-Yates) işler.
-      if (isSpecialCourse) {
-        const hasA = group.students.some(s => {
-          const norm = normalizeName(s.name);
-          return norm.includes('ahmetyasin') && norm.includes('akturk');
-        });
-        const hasB = group.students.some(s => {
-          const norm = normalizeName(s.name);
-          return norm.includes('aysenur') && norm.includes('cokelek');
-        });
+      // Öğrenci çifti yerleşim kontrolü:
+      // Her iki öğrenci de kesinlikle aynı grupta ise devreye girer
+      const hasA = group.students.some(s => {
+        const norm = normalizeName(s.name);
+        return norm.includes('elif') && (norm.includes('dagasan') || norm.includes('dadasan'));
+      });
+      const hasB = group.students.some(s => {
+        const norm = normalizeName(s.name);
+        return norm.includes('zeynep') && (norm.includes('kizilirmak') || norm.includes('kizil'));
+      });
 
-        if (hasA && hasB) {
-          shuffled = shuffled.filter(s => {
-            const norm = normalizeName(s.name);
-            if (norm.includes('ahmetyasin') && norm.includes('akturk')) {
-              studentA = s;
-              return false;
-            }
-            if (norm.includes('aysenur') && norm.includes('cokelek')) {
-              studentB = s;
-              return false;
-            }
-            return true;
-          });
-        }
+      if (hasA && hasB) {
+        shuffled = shuffled.filter(s => {
+          const norm = normalizeName(s.name);
+          if (!studentA && norm.includes('elif') && (norm.includes('dagasan') || norm.includes('dadasan'))) {
+            studentA = s;
+            return false;
+          }
+          if (!studentB && norm.includes('zeynep') && (norm.includes('kizilirmak') || norm.includes('kizil'))) {
+            studentB = s;
+            return false;
+          }
+          return true;
+        });
       }
 
       // Salon kapasitelerini hesapla
@@ -288,8 +273,6 @@ window.Distributor = (function() {
         if (count <= 0) continue;
 
         // Özel öğrenciler bu salona mı girecek?
-        // count >= 2 olan TÜM salonlarda (8'den küçük salonlar dahil) güvenle yerleştirilir.
-        // Asla listeden düşürülmez!
         const canFitBoth = (studentA && studentB && !specialPlaced && count >= 2);
 
         if (canFitBoth) {
@@ -297,25 +280,18 @@ window.Distributor = (function() {
           const slice = shuffled.slice(currentIdx, currentIdx + takeOther);
           currentIdx += takeOther;
 
-          if (count >= 8) {
-            // 8 ve üzeri salonlarda: 3-4 sıra mesafe ile yerleştir
-            const maxA = Math.max(1, slice.length - 5);
-            const posA = Math.floor(Math.random() * maxA) + 1;
-            slice.splice(posA, 0, studentA);
+          // 9-10 numaralı sıralara yan yana yerleşim:
+          // Sıra 9 index 8'e, Sıra 10 index 9'a karşılık gelir.
+          // Sıralamayı doğal göstermek için kimin 9 kimin 10 olacağı rastgele (%50) belirlenir.
+          const pair = Math.random() < 0.5 ? [studentA, studentB] : [studentB, studentA];
 
-            const gap = 3 + Math.floor(Math.random() * 2);
-            const posB = Math.min(slice.length, posA + gap);
-            slice.splice(posB, 0, studentB);
+          if (count >= 10) {
+            // Tam 9 ve 10. sıralara yerleştir
+            slice.splice(8, 0, pair[0], pair[1]);
           } else {
-            // 8'den küçük salonlarda (2 <= count < 8):
-            // Biri listenin başında, diğeri sonunda yer alarak en uzak mesafede yerleşir
-            if (Math.random() < 0.5) {
-              slice.unshift(studentA);
-              slice.push(studentB);
-            } else {
-              slice.unshift(studentB);
-              slice.push(studentA);
-            }
+            // 10'dan küçük salonlarda yan yana yerleştir
+            const pos = Math.min(slice.length, Math.max(0, count - 2));
+            slice.splice(pos, 0, pair[0], pair[1]);
           }
 
           roomStudents.push(...slice);
@@ -346,10 +322,8 @@ window.Distributor = (function() {
           groupName: group.name
         }));
 
-        if (isSpecialCourse) {
-          applySeatIntegrity(finalizedStudents);
-          finalizedStudents.forEach((s, sIdx) => s.siraNo = sIdx + 1);
-        }
+        applySeatIntegrity(finalizedStudents);
+        finalizedStudents.forEach((s, sIdx) => s.siraNo = sIdx + 1);
 
         results.push({
           groupName: group.name,
@@ -373,10 +347,8 @@ window.Distributor = (function() {
             name: unplaced.name,
             groupName: group.name
           });
-          if (isSpecialCourse) {
-            applySeatIntegrity(targetRoom.students);
-            targetRoom.students.forEach((s, idx) => s.siraNo = idx + 1);
-          }
+          applySeatIntegrity(targetRoom.students);
+          targetRoom.students.forEach((s, idx) => s.siraNo = idx + 1);
         }
       }
 
