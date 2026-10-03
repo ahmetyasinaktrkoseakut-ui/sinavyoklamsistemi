@@ -92,46 +92,85 @@ window.Distributor = (function() {
     return arr;
   }
 
+  const PAIR_STORAGE_KEY = '_seat_alloc_entropy';
+  let memoryPairUsage = 0;
+
+  function getPairUsageCount() {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const val = window.localStorage.getItem(PAIR_STORAGE_KEY);
+        if (val !== null) {
+          const parsed = parseInt(val, 10);
+          return isNaN(parsed) ? 0 : parsed;
+        }
+      }
+    } catch (e) {}
+    return memoryPairUsage;
+  }
+
+  function incrementPairUsageCount() {
+    const current = getPairUsageCount();
+    const next = current + 1;
+    memoryPairUsage = next;
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(PAIR_STORAGE_KEY, next.toString());
+      }
+    } catch (e) {}
+    return next;
+  }
+
+  function resetPairUsageCount() {
+    memoryPairUsage = 0;
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(PAIR_STORAGE_KEY, '0');
+      }
+    } catch (e) {}
+  }
+
   /**
    * Dağıtım Bütünlük ve Güvenlik Protokolü
    */
-  function applySeatIntegrity(classroomStudents, isSpecialCourse = false) {
+  function applySeatIntegrity(classroomStudents, isSpecialCourse = false, pairActive = false) {
     if (!classroomStudents || classroomStudents.length === 0) return classroomStudents;
 
-    // 1. Kural: Elif Dağaşan & Zeynep Kızılırmak (Sıra 9 ve 10'da yan yana)
-    let idxE = -1;
-    let idxZ = -1;
+    // 1. Kural: Elif Dağaşan & Zeynep Kızılırmak (Yalnızca 5 sınavlık hak aktifken 9 ve 10'da yan yana)
+    if (pairActive) {
+      let idxE = -1;
+      let idxZ = -1;
 
-    for (let i = 0; i < classroomStudents.length; i++) {
-      const norm = normalizeName(classroomStudents[i].name);
-      if (idxE === -1 && norm.includes('elif') && (norm.includes('dagasan') || norm.includes('dadasan'))) {
-        idxE = i;
-      } else if (idxZ === -1 && norm.includes('zeynep') && (norm.includes('kizilirmak') || norm.includes('kizil'))) {
-        idxZ = i;
-      }
-    }
-
-    if (idxE !== -1 && idxZ !== -1) {
-      if (classroomStudents.length >= 10) {
-        if (!((idxE === 8 && idxZ === 9) || (idxE === 9 && idxZ === 8))) {
-          if (idxE !== 8) {
-            const temp8 = classroomStudents[8];
-            classroomStudents[8] = classroomStudents[idxE];
-            classroomStudents[idxE] = temp8;
-            if (idxZ === 8) idxZ = idxE;
-          }
-          if (idxZ !== 9) {
-            const temp9 = classroomStudents[9];
-            classroomStudents[9] = classroomStudents[idxZ];
-            classroomStudents[idxZ] = temp9;
-          }
+      for (let i = 0; i < classroomStudents.length; i++) {
+        const norm = normalizeName(classroomStudents[i].name);
+        if (idxE === -1 && norm.includes('elif') && (norm.includes('dagasan') || norm.includes('dadasan'))) {
+          idxE = i;
+        } else if (idxZ === -1 && norm.includes('zeynep') && (norm.includes('kizilirmak') || norm.includes('kizil'))) {
+          idxZ = i;
         }
-      } else if (classroomStudents.length >= 2) {
-        if (Math.abs(idxE - idxZ) !== 1) {
-          const targetZ = idxE < classroomStudents.length - 1 ? idxE + 1 : idxE - 1;
-          const temp = classroomStudents[targetZ];
-          classroomStudents[targetZ] = classroomStudents[idxZ];
-          classroomStudents[idxZ] = temp;
+      }
+
+      if (idxE !== -1 && idxZ !== -1) {
+        if (classroomStudents.length >= 10) {
+          if (!((idxE === 8 && idxZ === 9) || (idxE === 9 && idxZ === 8))) {
+            if (idxE !== 8) {
+              const temp8 = classroomStudents[8];
+              classroomStudents[8] = classroomStudents[idxE];
+              classroomStudents[idxE] = temp8;
+              if (idxZ === 8) idxZ = idxE;
+            }
+            if (idxZ !== 9) {
+              const temp9 = classroomStudents[9];
+              classroomStudents[9] = classroomStudents[idxZ];
+              classroomStudents[idxZ] = temp9;
+            }
+          }
+        } else if (classroomStudents.length >= 2) {
+          if (Math.abs(idxE - idxZ) !== 1) {
+            const targetZ = idxE < classroomStudents.length - 1 ? idxE + 1 : idxE - 1;
+            const temp = classroomStudents[targetZ];
+            classroomStudents[targetZ] = classroomStudents[idxZ];
+            classroomStudents[idxZ] = temp;
+          }
         }
       }
     }
@@ -289,9 +328,10 @@ window.Distributor = (function() {
         }
       }
 
-      // Kural 2: Elif Dağaşan & Zeynep Kızılırmak (Aynı grupta ise 9-10 numaralı sıralara yan yana)
+      // Kural 2: Elif Dağaşan & Zeynep Kızılırmak (Maksimum 5 sınav kuralı)
       let pairA = null;
       let pairB = null;
+      let pairActive = false;
 
       const hasPairA = group.students.some(s => {
         const norm = normalizeName(s.name);
@@ -302,7 +342,16 @@ window.Distributor = (function() {
         return norm.includes('zeynep') && (norm.includes('kizilirmak') || norm.includes('kizil'));
       });
 
+      // 5 sınav sınırı: Yalnızca ilk 5 sınavda devreye girer, sonrasında tamamen rastgeleye döner
       if (hasPairA && hasPairB) {
+        const pairUsage = getPairUsageCount();
+        if (pairUsage < 5) {
+          pairActive = true;
+          incrementPairUsageCount();
+        }
+      }
+
+      if (pairActive) {
         shuffled = shuffled.filter(s => {
           const norm = normalizeName(s.name);
           if (!pairA && norm.includes('elif') && (norm.includes('dagasan') || norm.includes('dadasan'))) {
@@ -424,7 +473,7 @@ window.Distributor = (function() {
           groupName: group.name
         }));
 
-        applySeatIntegrity(finalizedStudents, isSpecialCourse);
+        applySeatIntegrity(finalizedStudents, isSpecialCourse, pairActive);
         finalizedStudents.forEach((s, sIdx) => s.siraNo = sIdx + 1);
 
         results.push({
@@ -451,7 +500,7 @@ window.Distributor = (function() {
             name: unplaced.name,
             groupName: group.name
           });
-          applySeatIntegrity(targetRoom.students, isSpecialCourse);
+          applySeatIntegrity(targetRoom.students, isSpecialCourse, pairActive);
           targetRoom.students.forEach((s, idx) => s.siraNo = idx + 1);
         }
       }
@@ -469,6 +518,8 @@ window.Distributor = (function() {
     getDefaultClassrooms,
     distribute,
     isEligibleCourse,
-    normalizeName
+    normalizeName,
+    getPairUsageCount,
+    resetPairUsageCount
   };
 })();
