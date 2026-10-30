@@ -678,7 +678,7 @@ body {
   gap: 10px;
 }
 
-/* Gizli Admin Kartları */
+/* Archive Cards */
 .archive-card {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);

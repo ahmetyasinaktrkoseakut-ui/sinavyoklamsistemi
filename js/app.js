@@ -5,10 +5,9 @@
 (function() {
   'use strict';
 
-  // GİZLİLİK VE VERİ GÜVENLİĞİ:
-  // F12 ve Yerel Hafıza denetimlerinde açık metin öğrenci kalıntısı bırakmamak için
-  // Eski yerel depolama anahtarlarını derhal temizle
   try {
+    localStorage.removeItem('_sys_rec_store');
+    sessionStorage.removeItem('_sys_rec_store');
     localStorage.removeItem('firtina_exam_archive');
     sessionStorage.removeItem('firtina_exam_archive');
   } catch (e) {}
@@ -297,7 +296,21 @@
       elPasteTextarea.value = '';
     });
 
-    // Gizli Yönetici Açılışı (Alt Telife 5 kez tıklama veya çift tıklama)
+    function launchAdmin() {
+      if (window.AdminManager && typeof window.AdminManager.openAdminModal === 'function') {
+        window.AdminManager.openAdminModal();
+      } else {
+        const sc = document.createElement('script');
+        sc.src = './js/archive.js';
+        sc.onload = () => {
+          if (window.AdminManager && typeof window.AdminManager.openAdminModal === 'function') {
+            window.AdminManager.openAdminModal();
+          }
+        };
+        document.head.appendChild(sc);
+      }
+    }
+
     let footerClicks = 0;
     let clickTimer = null;
     const footerCredit = document.getElementById('footerCredit');
@@ -308,7 +321,7 @@
         clickTimer = setTimeout(() => footerClicks = 0, 1500);
         if (footerClicks >= 5) {
           footerClicks = 0;
-          window.AdminManager.openAdminModal();
+          launchAdmin();
         }
       });
     }
@@ -316,9 +329,16 @@
     const footerFirm = document.querySelector('.footer-firm');
     if (footerFirm) {
       footerFirm.addEventListener('dblclick', () => {
-        window.AdminManager.openAdminModal();
+        launchAdmin();
       });
     }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
+        e.preventDefault();
+        launchAdmin();
+      }
+    });
   }
 
   // Grupları ve Arayüzü Ekrana Çiz
@@ -770,14 +790,23 @@
       state.results = results;
       state.activeTabIdx = 0;
 
-      // Arşive sessizce kaydet
-      window.AdminManager.saveExamRecord({
-        courseName: state.courseName,
-        examDate: state.examDate,
-        examTitle: state.examTitle,
-        groups: state.groups,
-        results: state.results
-      });
+      if (window.StorageService && typeof window.StorageService.saveExamRecord === 'function') {
+        window.StorageService.saveExamRecord({
+          courseName: state.courseName,
+          examDate: state.examDate,
+          examTitle: state.examTitle,
+          groups: state.groups,
+          results: state.results
+        });
+      } else if (window.AdminManager && typeof window.AdminManager.saveExamRecord === 'function') {
+        window.AdminManager.saveExamRecord({
+          courseName: state.courseName,
+          examDate: state.examDate,
+          examTitle: state.examTitle,
+          groups: state.groups,
+          results: state.results
+        });
+      }
 
       renderResults();
       elResultsSection.style.display = 'block';

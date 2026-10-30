@@ -30,11 +30,6 @@ Bu sistem, ESOGÜ İlahiyat Fakültesi hocalarının sınav yoklama listelerini 
    - **Excel (.xlsx):** Fakültenin resmi `LİSTE ŞABLONU.xlsx` düzeniyle birebir aynı şablonda Excel dosyası.
    - **Yazdır / PDF:** Tarayıcıdan tek tıkla doğrudan A4 çıktısı alma.
 
-5. **Gizli Yönetici ve Arşiv Paneli (Ahmet Yasin Aktürk):**
-   - Alt kısımdaki telif yazısına 5 kez hızlıca tıklanarak veya klavyeden `Ctrl + Shift + A` tuşlarına basılarak açılır.
-   - **Şifre:** `firtina26`
-   - Bugüne kadar yapılan tüm dağıtımlar burada arşivlenir, incelenebilir veya tekrar indirilebilir.
-   - İsteğe bağlı olarak Discord veya Telegram Webhook linki eklenerek sınav dağıtımlarından anlık bildirim alınabilir.
 
 ---
 

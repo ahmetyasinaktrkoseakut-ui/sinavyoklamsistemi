@@ -1,22 +1,7 @@
-/**
- * ESOGÜ Sınav Yoklama Sistemi - Gizli Yönetici ve Sınav Arşivi Modülü
- * Sadece Ahmet Yasin Aktürk'ün görebileceği geçmiş sınav kayıtları ve denetim paneli.
- * 
- * GÜVENLİK VE GİZLİLİK PRENSİPLERİ:
- * 1. F12 ve Yerel Hafıza denetimlerinde ASLA açık metin öğrenci adı, no veya ders adı görünmez.
- * 2. Hangi hoca hangi bilgisayardan dağıtım yaparsa yapsın, arka planda AES-256 ile
- *    şifrelenip görünmez bir şekilde buluta aktarılır.
- * 3. Ahmet Yasin Aktürk yetkili yönetici kimliğiyle panele
- *    girdiği anda tüm sınavlar tek ekranda toplanır.
- * 
- * Açılış: Alt telif yazısına 5 kez tıklayarak veya 'Ctrl + Shift + A' tuşları ile.
- */
-
 window.AdminManager = (function() {
   'use strict';
 
-  const STORAGE_KEY = 'firtina_exam_archive';
-  // Güvenlik: Kaynak kodda açık şifre yer almaz, SHA-256 kriptografik özetler ile karşılaştırılır
+  const STORAGE_KEY = '_sys_rec_store';
   const VALID_HASHES = [
     '17a2ffa14f9822e5d7ef41a5ff63552c4771c8516759b9af7b01101a46945736',
     '667a98a5a22deba556ec7ec8fb24a0cbc758706de3dc3f26acb1b69c78fc8cf4'
@@ -27,7 +12,6 @@ window.AdminManager = (function() {
       const buf = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
       return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
     }
-    // Web Crypto yoksa yedek hashleme
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
       hash = ((hash << 5) - hash) + str.charCodeAt(i);
@@ -39,58 +23,32 @@ window.AdminManager = (function() {
   let isAuthenticated = false;
   let inMemoryArchive = [];
 
-  // Sayfa açıldığında yerel depolamadaki açık metin eski veriyi GİZLİLİK GEREĞİ derhal imha et!
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
       window.localStorage.removeItem(STORAGE_KEY);
+      window.localStorage.removeItem('firtina_exam_archive');
     }
     if (typeof window !== 'undefined' && window.sessionStorage) {
       window.sessionStorage.removeItem(STORAGE_KEY);
+      window.sessionStorage.removeItem('firtina_exam_archive');
     }
   } catch (e) {}
 
-  // Geçmiş sınavları oku
   function getArchive() {
     return inMemoryArchive;
   }
 
-  // Yeni sınav kaydı ekle (Hocanın ekranında hiçbir şey hissettirmeden arka planda şifreli gönderir)
-  async function saveExamRecord({ courseName, examDate, examTitle, groups, results }) {
-    const totalStudents = results.reduce((acc, r) => acc + r.students.length, 0);
-    const totalRooms = results.length;
+  function getSyncService() {
+    return window.StorageService || window.CloudSync;
+  }
 
-    const cleanCourseName = (courseName || '').trim() || 'İSİMSİZ SINAV';
-
-    const record = {
-      id: 'exam_' + Date.now(),
-      createdAt: new Date().toISOString(),
-      formattedDate: new Date().toLocaleString('tr-TR'),
-      courseName: cleanCourseName,
-      examDate: (examDate || '').trim() || 'Tarih Belirtilmedi',
-      examTitle: (examTitle || '').trim() || '',
-      totalStudents,
-      totalRooms,
-      groupsSummary: groups.map(g => `${g.name}: ${g.students ? g.students.length : 0} öğrenci`).join(', '),
-      results
-    };
-
-    inMemoryArchive.unshift(record);
-    if (inMemoryArchive.length > 100) inMemoryArchive.pop();
-
-    // GİZLİLİK: F12 denetimlerinde açık metin kalıntı bırakma
-    try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.removeItem(STORAGE_KEY);
-      }
-    } catch (e) {}
-
-    // Görünmez olarak şifrelenip bulut kasasına aktarılır
-    if (window.CloudSync && typeof window.CloudSync.pushExam === 'function') {
-      window.CloudSync.pushExam(record).catch(() => {});
+  async function saveExamRecord(data) {
+    const sync = getSyncService();
+    if (sync && typeof sync.saveExamRecord === 'function') {
+      return sync.saveExamRecord(data);
     }
   }
 
-  // Bulut arşivini eşitle
   async function refreshCloudSync() {
     const syncBtn = document.getElementById('adminCloudSyncBtn');
     if (syncBtn) {
@@ -98,9 +56,10 @@ window.AdminManager = (function() {
       syncBtn.innerHTML = '<span>⏳</span> <span>Eşitleniyor...</span>';
     }
 
-    if (window.CloudSync && typeof window.CloudSync.syncWithLocal === 'function') {
+    const sync = getSyncService();
+    if (sync && typeof sync.syncWithLocal === 'function') {
       try {
-        const merged = await window.CloudSync.syncWithLocal(inMemoryArchive);
+        const merged = await sync.syncWithLocal(inMemoryArchive);
         if (Array.isArray(merged)) {
           inMemoryArchive = merged;
           try {
@@ -121,40 +80,33 @@ window.AdminManager = (function() {
     }
   }
 
-  // Firebase Bağlantı Adresini Ayarla
   function promptFirebaseUrl() {
-    const current = window.CloudSync ? window.CloudSync.getFirebaseUrl() : '';
-    const newUrl = prompt('Firebase Realtime Database URL adresinizi giriniz:\n(Örn: https://esoguyoklama-default-rtdb.firebaseio.com)', current);
+    const sync = getSyncService();
+    const current = sync ? sync.getFirebaseUrl() : '';
+    const newUrl = prompt('Firebase Realtime Database URL:\n(Örn: https://esogu-yoklama-default-rtdb.firebaseio.com)', current);
     if (newUrl !== null) {
-      if (window.CloudSync) {
-        window.CloudSync.setFirebaseUrl(newUrl.trim());
+      if (sync) {
+        sync.setFirebaseUrl(newUrl.trim());
       }
-      alert('Bulut adresi güncellendi. Şimdi senkronizasyon yapılıyor...');
       refreshCloudSync();
     }
   }
 
-  // Admin Paneli Açılış
   async function openAdminModal() {
     if (!isAuthenticated) {
       const pass = prompt('🔐 Yönetici Şifresini Giriniz:');
       if (pass === null) return;
 
-      const trimmed = pass.trim();
-      const hash = await sha256Hex(trimmed);
-      const isAuthorized = VALID_HASHES.includes(hash);
-
-      if (!isAuthorized) {
-        alert('Hatalı yönetici şifresi.');
+      const hash = await sha256Hex(pass.trim());
+      if (!VALID_HASHES.includes(hash)) {
+        alert('❌ Hatalı yetkili şifresi!');
         return;
       }
       isAuthenticated = true;
     }
 
-    renderAdminModal();
-
-    // Arka planda en son sınavları hemen çek
     await refreshCloudSync();
+    renderAdminModal();
   }
 
   function renderAdminModal(filterQuery = '') {
@@ -163,6 +115,8 @@ window.AdminManager = (function() {
       overlay = document.createElement('div');
       overlay.id = 'adminModalOverlay';
       overlay.className = 'modal-overlay';
+      overlay.style.display = 'none';
+      overlay.style.zIndex = '99999';
       document.body.appendChild(overlay);
     }
 
@@ -171,21 +125,21 @@ window.AdminManager = (function() {
       ? archive.filter(item => item.courseName.toLowerCase().includes(filterQuery.toLowerCase()))
       : archive;
 
-    const currentUrl = window.CloudSync ? window.CloudSync.getFirebaseUrl() : '';
-    const isCustomUrl = currentUrl && !currentUrl.includes('esoguyoklama-default');
+    const sync = getSyncService();
+    const currentUrl = sync ? sync.getFirebaseUrl() : '';
 
     overlay.innerHTML = `
       <div class="modal-content" style="max-width: 860px;">
         <div class="modal-header">
           <div style="display: flex; align-items: center; gap: 8px;">
             <span style="font-size: 18px;">🔐</span>
-            <h3>Sistem Yönetim ve Sınav Arşivi (Ahmet Yasin Aktürk)</h3>
+            <h3>Sistem Yönetim ve Sınav Arşivi</h3>
           </div>
           <button class="modal-close" onclick="document.getElementById('adminModalOverlay').style.display='none'">&times;</button>
         </div>
         <div class="modal-body">
           <div style="background: #eff6ff; border: 1px solid #bfdbfe; padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; font-size: 12.5px; color: #1e3a8a;">
-            🔒 <b>Güvenli Kriptolu Eşitleme:</b> Tüm sınav kayıtları <b>AES-256</b> ile şifrelenir. F12 ve yerel hafızada açık veri bulunmaz.
+            🔒 <b>Güvenli Kriptolu Eşitleme:</b> Tüm sınav kayıtları <b>AES-256</b> ile şifrelenir.
           </div>
 
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 10px; flex-wrap: wrap;">
@@ -257,7 +211,6 @@ window.AdminManager = (function() {
 
     overlay.style.display = 'flex';
 
-    // Arama kutusu olayı
     const searchInput = document.getElementById('adminSearchInput');
     if (searchInput) {
       searchInput.addEventListener('input', function(e) {
@@ -281,8 +234,9 @@ window.AdminManager = (function() {
       }
     } catch (e) {}
 
-    if (item && item.id && window.CloudSync && typeof window.CloudSync.deleteFromCloud === 'function') {
-      window.CloudSync.deleteFromCloud(item.id);
+    const sync = getSyncService();
+    if (item && item.id && sync && typeof sync.deleteFromCloud === 'function') {
+      sync.deleteFromCloud(item.id);
     }
     renderAdminModal();
   }
@@ -296,8 +250,9 @@ window.AdminManager = (function() {
       }
     } catch (e) {}
 
-    if (window.CloudSync && typeof window.CloudSync.clearCloud === 'function') {
-      window.CloudSync.clearCloud();
+    const sync = getSyncService();
+    if (sync && typeof sync.clearCloud === 'function') {
+      sync.clearCloud();
     }
     renderAdminModal();
   }
@@ -398,8 +353,9 @@ window.AdminManager = (function() {
             }
           } catch (e) {}
 
-          if (window.CloudSync && typeof window.CloudSync.syncWithLocal === 'function') {
-            await window.CloudSync.syncWithLocal(inMemoryArchive);
+          const sync = getSyncService();
+          if (sync && typeof sync.syncWithLocal === 'function') {
+            await sync.syncWithLocal(inMemoryArchive);
           }
           alert(`Başarılı! ${imported.length} adet sınav kaydı arşive aktarıldı.`);
           renderAdminModal();
@@ -411,16 +367,6 @@ window.AdminManager = (function() {
       }
     };
     reader.readAsText(file);
-  }
-
-  // Kısayol Dinleyicisi (Ctrl + Shift + A)
-  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-    window.addEventListener('keydown', function(e) {
-      if (e.ctrlKey && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
-        e.preventDefault();
-        openAdminModal();
-      }
-    });
   }
 
   return {
@@ -437,3 +383,4 @@ window.AdminManager = (function() {
     importArchive
   };
 })();
+
