@@ -696,6 +696,12 @@
 
   // Dağıtımı Başlat
   function handleDistribute() {
+    if (!state.examTitle || !state.examTitle.trim()) {
+      alert('⚠️ Lütfen "Sınav ve Liste Üst Başlığı" alanını doldurunuz.\n(Örn: 2026-2027 EĞİTİM-ÖĞRETİM YILI GÜZ YARIYILI VİZE SINAVI YOKLAMA LİSTESİ)');
+      if (elExamTitle) elExamTitle.focus();
+      return;
+    }
+
     if (!state.courseName.trim()) {
       alert('Lütfen sınavın Ders Adını giriniz.');
       elCourseName.focus();
@@ -892,7 +898,7 @@
       <div class="print-page">
         <div style="text-align: center; margin-bottom: 12px;">
           <h2 style="font-size: 13pt; margin-bottom: 4px;">ESKİŞEHİR OSMANGAZİ ÜNİVERSİTESİ İLAHİYAT FAKÜLTESİ</h2>
-          <h3 style="font-size: 11pt;">${(state.examTitle || '').trim() || (state.academicYear ? `${state.academicYear} FİNAL SINAVI YOKLAMA LİSTESİ` : 'FİNAL SINAVI YOKLAMA LİSTESİ')}</h3>
+          <h3 style="font-size: 11pt;">${(state.examTitle || '').trim() || 'SINAV YOKLAMA LİSTESİ'}</h3>
         </div>
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 10pt;">
           <tr>

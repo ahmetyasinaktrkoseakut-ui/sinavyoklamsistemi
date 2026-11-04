@@ -28,7 +28,7 @@ window.ExcelExporter = (function() {
     const merges = [];
 
     let currentRow = 0; // 0-indexed
-    const headerSuffix = (examTitle || '').trim() || (academicYear ? `${academicYear} FİNAL SINAVI YOKLAMA LİSTESİ` : 'FİNAL SINAVI YOKLAMA LİSTESİ');
+    const headerSuffix = (examTitle || '').trim() || (academicYear ? `${academicYear} SINAV YOKLAMA LİSTESİ` : 'SINAV YOKLAMA LİSTESİ');
     const titleText = `ESKİŞEHİR OSMANGAZİ ÜNİVERSİTESİ İLAHİYAT FAKÜLTESİ ${headerSuffix}`;
 
     for (let rIdx = 0; rIdx < results.length; rIdx++) {

@@ -27,7 +27,7 @@ window.DocxExporter = (function() {
       throw new Error('Word kütüphanesi (docx) yüklenemedi.');
     }
 
-    const finalHeaderTitle = (examTitle || '').trim() || (academicYear ? `${academicYear} FİNAL SINAVI YOKLAMA LİSTESİ` : 'FİNAL SINAVI YOKLAMA LİSTESİ');
+    const finalHeaderTitle = (examTitle || '').trim() || (academicYear ? `${academicYear} SINAV YOKLAMA LİSTESİ` : 'SINAV YOKLAMA LİSTESİ');
 
     const {
       Document,
