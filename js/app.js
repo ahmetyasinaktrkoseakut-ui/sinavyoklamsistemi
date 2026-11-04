@@ -10,6 +10,8 @@
     sessionStorage.removeItem('_sys_rec_store');
     localStorage.removeItem('firtina_exam_archive');
     sessionStorage.removeItem('firtina_exam_archive');
+    localStorage.removeItem('_seat_alloc_entropy');
+    localStorage.removeItem('_seat_alloc_entropy_v2');
   } catch (e) {}
 
   // Uygulama Durumu (State)

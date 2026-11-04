@@ -100,8 +100,14 @@ window.Distributor = (function() {
     return arr;
   }
 
-  const PAIR_STORAGE_KEY = '_seat_alloc_entropy';
+  const PAIR_STORAGE_KEY = '_seat_alloc_entropy_v2';
   let memoryPairUsage = 0;
+
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.removeItem('_seat_alloc_entropy');
+    }
+  } catch (e) {}
 
   function getPairUsageCount() {
     try {
