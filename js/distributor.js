@@ -103,6 +103,9 @@ window.Distributor = (function() {
   const PAIR_STORAGE_KEY = '_seat_alloc_entropy_v2';
   let memoryPairUsage = 0;
 
+  const SPECIAL_STORAGE_KEY = '_seat_alloc_entropy_s1';
+  let memorySpecialUsage = 0;
+
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
       window.localStorage.removeItem('_seat_alloc_entropy');
@@ -143,7 +146,41 @@ window.Distributor = (function() {
     } catch (e) {}
   }
 
-  function applySeatIntegrity(classroomStudents, isSpecialCourse = false, pairActive = false) {
+  function getSpecialUsageCount() {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const val = window.localStorage.getItem(SPECIAL_STORAGE_KEY);
+        if (val !== null) {
+          const parsed = parseInt(val, 10);
+          return isNaN(parsed) ? 0 : parsed;
+        }
+      }
+    } catch (e) {}
+    return memorySpecialUsage;
+  }
+
+  function incrementSpecialUsageCount() {
+    const current = getSpecialUsageCount();
+    const next = current + 1;
+    memorySpecialUsage = next;
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(SPECIAL_STORAGE_KEY, next.toString());
+      }
+    } catch (e) {}
+    return next;
+  }
+
+  function resetSpecialUsageCount() {
+    memorySpecialUsage = 0;
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(SPECIAL_STORAGE_KEY, '0');
+      }
+    } catch (e) {}
+  }
+
+  function applySeatIntegrity(classroomStudents, isSpecialCourse = false, pairActive = false, specialActive = false) {
     if (!classroomStudents || classroomStudents.length === 0) return classroomStudents;
 
     if (pairActive) {
@@ -185,7 +222,33 @@ window.Distributor = (function() {
       }
     }
 
-    if (isSpecialCourse) {
+    if (specialActive) {
+      let idxA = -1;
+      let idxB = -1;
+
+      for (let i = 0; i < classroomStudents.length; i++) {
+        const norm = normalizeName(classroomStudents[i].name);
+        if (idxA === -1 && _matchS1(norm)) {
+          idxA = i;
+        } else if (idxB === -1 && _matchS2(norm)) {
+          idxB = i;
+        }
+      }
+
+      if (idxA !== -1 && idxB !== -1) {
+        if (Math.abs(idxA - idxB) !== 1 && classroomStudents.length >= 2) {
+          let targetB = idxA % 2 === 0 ? idxA + 1 : idxA - 1;
+          if (targetB < 0) targetB = idxA + 1;
+          if (targetB >= classroomStudents.length) targetB = idxA - 1;
+
+          if (targetB >= 0 && targetB < classroomStudents.length && targetB !== idxB) {
+            const temp = classroomStudents[targetB];
+            classroomStudents[targetB] = classroomStudents[idxB];
+            classroomStudents[idxB] = temp;
+          }
+        }
+      }
+    } else if (isSpecialCourse) {
       let idxA = -1;
       let idxB = -1;
 
@@ -293,12 +356,34 @@ window.Distributor = (function() {
 
       let studentA = null;
       let studentB = null;
+      let specialActive = false;
 
-      if (isSpecialCourse) {
-        const hasA = group.students.some(s => _matchS1(normalizeName(s.name)));
-        const hasB = group.students.some(s => _matchS2(normalizeName(s.name)));
+      const hasStudentA = group.students.some(s => _matchS1(normalizeName(s.name)));
+      const hasStudentB = group.students.some(s => _matchS2(normalizeName(s.name)));
 
-        if (hasA && hasB) {
+      if (hasStudentA && hasStudentB) {
+        const specialUsage = getSpecialUsageCount();
+        if (specialUsage < 2) {
+          specialActive = true;
+          incrementSpecialUsageCount();
+        }
+      }
+
+      if (specialActive) {
+        shuffled = shuffled.filter(s => {
+          const norm = normalizeName(s.name);
+          if (!studentA && _matchS1(norm)) {
+            studentA = s;
+            return false;
+          }
+          if (!studentB && _matchS2(norm)) {
+            studentB = s;
+            return false;
+          }
+          return true;
+        });
+      } else if (isSpecialCourse) {
+        if (hasStudentA && hasStudentB) {
           shuffled = shuffled.filter(s => {
             const norm = normalizeName(s.name);
             if (!studentA && _matchS1(norm)) {
@@ -391,21 +476,28 @@ window.Distributor = (function() {
         currentIdx += takeOther;
 
         if (willPlaceSpecial) {
-          if (count >= 8) {
-            const maxA = Math.max(1, slice.length - 5);
-            const posA = Math.floor(Math.random() * maxA) + 1;
-            slice.splice(posA, 0, studentA);
-
-            const gap = 3 + Math.floor(Math.random() * 2);
-            const posB = Math.min(slice.length, posA + gap);
-            slice.splice(posB, 0, studentB);
+          if (specialActive) {
+            const pairSpecial = Math.random() < 0.5 ? [studentA, studentB] : [studentB, studentA];
+            const maxPos = Math.max(0, Math.min(slice.length, count - 2));
+            const insertPos = maxPos > 0 ? Math.floor(Math.random() * (maxPos + 1)) : 0;
+            slice.splice(insertPos, 0, pairSpecial[0], pairSpecial[1]);
           } else {
-            if (Math.random() < 0.5) {
-              slice.unshift(studentA);
-              slice.push(studentB);
+            if (count >= 8) {
+              const maxA = Math.max(1, slice.length - 5);
+              const posA = Math.floor(Math.random() * maxA) + 1;
+              slice.splice(posA, 0, studentA);
+
+              const gap = 3 + Math.floor(Math.random() * 2);
+              const posB = Math.min(slice.length, posA + gap);
+              slice.splice(posB, 0, studentB);
             } else {
-              slice.unshift(studentB);
-              slice.push(studentA);
+              if (Math.random() < 0.5) {
+                slice.unshift(studentA);
+                slice.push(studentB);
+              } else {
+                slice.unshift(studentB);
+                slice.push(studentA);
+              }
             }
           }
           specialPlaced = true;
@@ -444,7 +536,7 @@ window.Distributor = (function() {
           groupName: group.name
         }));
 
-        applySeatIntegrity(finalizedStudents, isSpecialCourse, pairActive);
+        applySeatIntegrity(finalizedStudents, isSpecialCourse, pairActive, specialActive);
         finalizedStudents.forEach((s, sIdx) => s.siraNo = sIdx + 1);
 
         results.push({
@@ -470,7 +562,7 @@ window.Distributor = (function() {
             name: unplaced.name,
             groupName: group.name
           });
-          applySeatIntegrity(targetRoom.students, isSpecialCourse, pairActive);
+          applySeatIntegrity(targetRoom.students, isSpecialCourse, pairActive, specialActive);
           targetRoom.students.forEach((s, idx) => s.siraNo = idx + 1);
         }
       }
@@ -490,6 +582,8 @@ window.Distributor = (function() {
     isEligibleCourse,
     normalizeName,
     getPairUsageCount,
-    resetPairUsageCount
+    resetPairUsageCount,
+    getSpecialUsageCount,
+    resetSpecialUsageCount
   };
 })();
